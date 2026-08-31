@@ -72,7 +72,12 @@ jobs:
           # ALT is the awkward one and therefore the one most worth testing: it
           # has apt-get but rpm-flavoured, ALT-specific package names and no
           # ID_LIKE, so every "has apt ⇒ Debian" heuristic gets it wrong.
-          - { name: ALT Sisyphus, image: "alt:sisyphus", bootstrap: "apt-get update -qq && apt-get install -y curl ca-certificates git" }
+          # glibc-pthread ships libpthread.so.0, which ALT's glibc (>= 2.34)
+          # merged into libc and no longer provides. Without it the runner's
+          # Node 24 cannot even start and every `uses:` action dies before the
+          # bootstrap step, which is why it has to be installed here and not in
+          # scripts/deps.sh (that runs after checkout).
+          - { name: ALT Sisyphus, image: "alt:sisyphus", bootstrap: "apt-get update -qq && apt-get install -y curl ca-certificates git glibc-pthread" }
     steps:
       - name: Bootstrap the container
         run: ${{ matrix.bootstrap }}
