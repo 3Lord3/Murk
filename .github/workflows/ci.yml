@@ -24,6 +24,8 @@ jobs:
           apt-get install -y --no-install-recommends curl ca-certificates
           ./scripts/deps.sh --install
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
