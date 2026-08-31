@@ -3,6 +3,7 @@
   "private": true,
   "license": "GPL-2.0-or-later",
   "version": "0.1.0",
+  "packageManager": "pnpm@11.24.0",
   "type": "module",
   "scripts": {
     "dev": "vite",

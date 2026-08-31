@@ -438,6 +438,12 @@ struct Cached {
     url: Option<String>,
 }
 
+impl Default for DataUrlCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DataUrlCache {
     pub fn new() -> Self {
         Self {

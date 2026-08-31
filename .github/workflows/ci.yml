@@ -17,13 +17,15 @@ jobs:
     runs-on: ubuntu-latest
     container: debian:trixie
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install build dependencies
         run: |
           apt-get update -qq
           apt-get install -y --no-install-recommends curl ca-certificates
           ./scripts/deps.sh --install
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
@@ -39,7 +41,7 @@ jobs:
     name: frontend
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -72,11 +74,16 @@ jobs:
           # ALT is the awkward one and therefore the one most worth testing: it
           # has apt-get but rpm-flavoured, ALT-specific package names and no
           # ID_LIKE, so every "has apt ⇒ Debian" heuristic gets it wrong.
-          - { name: ALT Sisyphus, image: "alt:sisyphus", bootstrap: "apt-get update -qq && apt-get install -y curl ca-certificates git" }
+          # glibc-pthread ships libpthread.so.0, which ALT's glibc (>= 2.34)
+          # merged into libc and no longer provides. Without it the runner's
+          # Node 24 cannot even start and every `uses:` action dies before the
+          # bootstrap step, which is why it has to be installed here and not in
+          # scripts/deps.sh (that runs after checkout).
+          - { name: ALT Sisyphus, image: "alt:sisyphus", bootstrap: "apt-get update -qq && apt-get install -y curl ca-certificates git glibc-pthread" }
     steps:
       - name: Bootstrap the container
         run: ${{ matrix.bootstrap }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Resolve dependencies
         # Runs before anything else on every distribution: it is the step that
         # notices a renamed package the day it is renamed.
@@ -94,7 +101,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [tests, frontend]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
