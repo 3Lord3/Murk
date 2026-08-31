@@ -1,0 +1,63 @@
+[package]
+name = "murk"
+version = "0.1.0"
+description = "A player that shows you the film, not the spoilers"
+authors = ["Murk contributors"]
+edition = "2021"
+license = "GPL-2.0-or-later"
+rust-version = "1.82"
+
+[lib]
+# The Tauri mobile entry point needs a cdylib; the desktop binary links the rlib.
+name = "murk_lib"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+pkg-config = "0.3"
+
+[dependencies]
+tauri = { version = "2.11.5", features = [] }
+tauri-plugin-dialog = "2"
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+libmpv2 = "6.0.0"
+rusqlite = { version = "0.40", features = ["bundled"] }
+
+anyhow = "1"
+thiserror = "2"
+parking_lot = "0.12"
+regex = "1"
+walkdir = "2"
+base64 = "0.22"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# gtk is NOT a free choice of version: it must resolve to the very same 0.18.x
+# that Tauri itself depends on, otherwise gtk::ApplicationWindow returned by
+# `WebviewWindow::gtk_window()` is a different type from the one we can put a
+# widget into. Cargo unifies semver-compatible requirements, so pinning the same
+# "0.18" requirement Tauri uses guarantees a single gtk in the graph.
+# glib/gdk are deliberately absent: they are reached through gtk::{glib, gdk}.
+gtk = { version = "0.18", features = ["v3_24"] }
+# libepoxy is opened at runtime rather than linked: see player/render.rs for
+# why the `epoxy` crate cannot be used.
+libloading = "0.9"
+# For setlocale: libmpv refuses to initialise under a non-C LC_NUMERIC, and GTK
+# sets one. See player::force_c_numeric_locale.
+libc = "0.2"
+
+[features]
+# Enabled by `tauri dev`; opens devtools. Verification step 12 of the plan
+# inspects the IPC payload through it.
+devtools = ["tauri/devtools"]
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

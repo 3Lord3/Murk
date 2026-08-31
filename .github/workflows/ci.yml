@@ -1,0 +1,117 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # The privacy projection and the filename parser have no system dependencies,
+  # so they run first and fail fast. This job is the regression barrier the
+  # product rests on; everything else is a build check.
+  tests:
+    name: tests
+    runs-on: ubuntu-latest
+    container: debian:trixie
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: |
+          apt-get update -qq
+          apt-get install -y --no-install-recommends curl ca-certificates
+          ./scripts/deps.sh --install
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: Frontend placeholder
+        # tauri-build wants the dist directory to exist; the tests do not need
+        # the real frontend.
+        run: mkdir -p dist && touch dist/index.html
+      - run: cargo test --manifest-path src-tauri/Cargo.toml
+      - run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+      - run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
+
+  frontend:
+    name: frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Catalogue parity, and the check that no string was hard-coded past the
+      # translators. Runs before the build because it is the cheaper failure.
+      - run: ./scripts/check-i18n.sh
+      # `pnpm build` runs vue-tsc first, so a type error fails here. The store
+      # types are the second line of defence behind the server projection:
+      # `positionSec?: number` means a component cannot render a hidden field
+      # without saying what it does when the field is absent.
+      - run: pnpm build
+
+  # One container per target distribution. This is what catches a package name
+  # changing under us, before a user reports it rather than after.
+  distros:
+    name: build on ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    container: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: Debian, image: "debian:trixie", bootstrap: "apt-get update -qq && apt-get install -y --no-install-recommends curl ca-certificates git" }
+          - { name: Ubuntu, image: "ubuntu:rolling", bootstrap: "apt-get update -qq && apt-get install -y --no-install-recommends curl ca-certificates git" }
+          - { name: Fedora, image: "fedora:latest", bootstrap: "dnf install -y curl ca-certificates git" }
+          - { name: Arch, image: "archlinux:latest", bootstrap: "pacman -Sy --noconfirm curl ca-certificates git" }
+          # ALT is the awkward one and therefore the one most worth testing: it
+          # has apt-get but rpm-flavoured, ALT-specific package names and no
+          # ID_LIKE, so every "has apt ⇒ Debian" heuristic gets it wrong.
+          - { name: ALT Sisyphus, image: "alt:sisyphus", bootstrap: "apt-get update -qq && apt-get install -y curl ca-certificates git" }
+    steps:
+      - name: Bootstrap the container
+        run: ${{ matrix.bootstrap }}
+      - uses: actions/checkout@v4
+      - name: Resolve dependencies
+        # Runs before anything else on every distribution: it is the step that
+        # notices a renamed package the day it is renamed.
+        run: ./scripts/deps.sh --install
+      - name: Install Rust
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      - name: Frontend placeholder
+        run: mkdir -p dist && touch dist/index.html
+      - run: cargo build --manifest-path src-tauri/Cargo.toml
+
+  packages:
+    name: packages
+    runs-on: ubuntu-latest
+    needs: [tests, frontend]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install build dependencies
+        run: sudo ./scripts/deps.sh --install
+      - uses: dtolnay/rust-toolchain@stable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm tauri build --bundles deb,rpm
+      - name: Dependencies must come from sonames, not package names
+        run: |
+          sudo apt-get install -y rpm
+          ./scripts/check-package-deps.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages
+          path: |
+            src-tauri/target/release/bundle/deb/*.deb
+            src-tauri/target/release/bundle/rpm/*.rpm

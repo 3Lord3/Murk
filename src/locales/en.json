@@ -1,0 +1,177 @@
+{
+  "common": {
+    "close": "Close",
+    "cancel": "Cancel"
+  },
+  "errors": {
+    "unknown": "Something went wrong.",
+    "play_pause_failed": "Could not pause or resume.",
+    "seek_failed": "Could not seek.",
+    "volume_failed": "Could not change the volume.",
+    "track_switch_failed": "Could not switch the track.",
+    "stop_failed": "Could not stop playback.",
+    "no_window": "The window is gone.",
+    "fullscreen_failed": "Could not switch to full screen.",
+    "library_read_failed": "Could not read the library.",
+    "not_a_folder": "Choose a series folder, not a file.",
+    "could_not_add_series": "Could not add the series.",
+    "could_not_index_series": "Could not index the series.",
+    "no_such_series": "There is no such series.",
+    "rescan_failed": "The rescan failed.",
+    "unsupported_image_type": "Choose a JPG, PNG or WebP image.",
+    "could_not_read_image": "Could not read the image.",
+    "image_empty": "The chosen file is empty.",
+    "image_too_large": "The image is too large.",
+    "could_not_save_cover": "Could not save the cover.",
+    "could_not_clear_cover": "Could not remove the cover.",
+    "could_not_remove_series": "Could not remove the series.",
+    "could_not_reset_progress": "Could not reset the progress.",
+    "no_video_files": "No video files were found in this folder.",
+    "nothing_next": "There is nothing after this one.",
+    "could_not_start_playback": "Could not start playback.",
+    "unknown_profile": "There is no such hiding profile.",
+    "could_not_save_profile": "Could not save the profile.",
+    "peek_disabled": "Peeking is switched off in this profile.",
+    "nothing_playing": "Nothing is playing right now.",
+    "could_not_read_setting": "Could not read the setting.",
+    "could_not_save_setting": "Could not save the setting."
+  },
+  "titlebar": {
+    "minimise": "Minimise",
+    "close": "Close"
+  },
+  "library": {
+    "title": "Library",
+    "addFolder": "Add a folder",
+    "settings": "Settings",
+    "empty": {
+      "lead": "Nothing here yet.",
+      "hint": "Add a series folder. Murk will remember where you stopped, and will not show you where that was."
+    },
+    "start": "Start",
+    "continue": "Continue",
+    "progressAlt": "Watching progress: {name}",
+    "coverAlt": "Cover: {name}",
+    "more": "More",
+    "menu": {
+      "choosePoster": "Choose a cover",
+      "replacePoster": "Replace the cover",
+      "clearPoster": "Remove the cover",
+      "rescan": "Rescan",
+      "resetProgress": "Reset progress",
+      "remove": "Remove from the library"
+    },
+    "dialog": {
+      "folderTitle": "Series folder",
+      "posterTitle": "Series cover",
+      "imageFilter": "Images",
+      "resetTitle": "Reset progress",
+      "resetConfirm": "Reset",
+      "resetBody": "The whole series' progress will be forgotten: resume points and \"watched\" marks. This cannot be undone.",
+      "removeTitle": "Remove from the library",
+      "removeBody": "The series will be removed from the library. The files on disk are left alone, but all of its progress will be forgotten.",
+      "removeConfirm": "Remove"
+    }
+  },
+  "controls": {
+    "play": "Play",
+    "pause": "Pause",
+    "back10": "Back 10 seconds",
+    "forward10": "Forward 10 seconds",
+    "volume": "Volume",
+    "mute": "Mute",
+    "unmute": "Unmute",
+    "audioTrack": "Audio track",
+    "subtitles": "Subtitles",
+    "noSubtitles": "No subtitles",
+    "trackFallback": "Track {number}",
+    "peek": "Ask about what is left",
+    "fullscreen": "Full screen",
+    "leave": "Stop watching"
+  },
+  "watch": {
+    "seekMinutes": "{count} min",
+    "seekSeconds": "{count} sec"
+  },
+  "peek": {
+    "heading": "Peek",
+    "withinLead": "Can I finish it within…",
+    "minutesChip": "{minutes} min",
+    "fits": "Yes, {minutes} min is enough",
+    "doesNotFit": "No, longer than {minutes} min",
+    "remaining": "About {minutes} min left",
+    "season": "season {number}",
+    "episode": "episode {number}",
+    "unknownIdentity": "The number is unknown",
+    "exactLead": "Exact numbers. This is the thing you installed Murk to avoid. Are you sure?",
+    "exactButton": "Show the exact numbers",
+    "remainingButton": "How much is left",
+    "identityButton": "Which episode this is"
+  },
+  "advance": {
+    "lead": "Next: the following episode",
+    "countdown": "in {seconds}…",
+    "watch": "Watch",
+    "stop": "That's enough",
+    "endLead": "That's the end of this one.",
+    "library": "Back to the library",
+    "stay": "Stay here"
+  },
+  "settings": {
+    "title": "Settings",
+    "back": "Back",
+    "profiles": {
+      "heading": "Hiding profile",
+      "note": "The profile decides what you see while watching. What is hidden is not blurred out; such data is simply absent from the interface.",
+      "selected": "selected",
+      "meta": "Progress bar: {bar} · {peek}",
+      "barHidden": "hidden",
+      "barShown": "shown"
+    },
+    "peekModes": {
+      "disabled": "no peeking",
+      "coarse": "only \"yes\" or \"no\"",
+      "confirmed": "exact numbers after a confirmation"
+    },
+    "language": {
+      "heading": "Language",
+      "note": "Murk speaks your system's language if it knows it, and English if it does not. You can overrule that here.",
+      "system": "System language",
+      "systemResolved": "now: {language}",
+      "selected": "selected"
+    },
+    "keys": {
+      "heading": "Controls",
+      "space": "Space",
+      "pause": "pause",
+      "arrows": "← / →",
+      "seek10": "±10 seconds",
+      "shiftArrows": "Shift + ← / →",
+      "seek60": "±1 minute",
+      "ctrlArrows": "Ctrl + ← / →",
+      "seek300": "±5 minutes",
+      "verticalArrows": "↑ / ↓",
+      "volume": "volume",
+      "f": "F",
+      "fullscreen": "full screen",
+      "question": "?",
+      "peek": "peek",
+      "escape": "Esc",
+      "leave": "stop watching"
+    }
+  },
+  "profiles": {
+    "full_darkness": {
+      "title": "Total Murk",
+      "blurb": "Everything is hidden, and you cannot even ask. Episodes follow one another without a prompt. Maximum caution."
+    },
+    "standard": {
+      "title": "Standard",
+      "blurb": "Everything is hidden, but the exact numbers can be had after a confirmation."
+    },
+    "soft": {
+      "title": "Soft",
+      "blurb": "For a rewatch: titles and the progress bar are visible, without numbers or the time left."
+    }
+  }
+}

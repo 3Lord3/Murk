@@ -1,0 +1,168 @@
+/*
+ * Global sheet. Everything that is *component* styling lives in that
+ * component's `<style module>` block; what stays here is the handful of rules
+ * that cannot be scoped: the document reset, the design tokens, and the
+ * transparency contract with the video surface.
+ */
+
+/* --- Design tokens ------------------------------------------------------ */
+
+:root {
+  --c-text: #e8eaf0;
+  --c-text-strong: #f1f3f8;
+  --c-text-muted: #94a0b4;
+  --c-text-faint: #6b7688;
+  --c-text-dim: #4b5464;
+
+  --c-surface: #0f131b;
+  --c-surface-raised: #1a2030;
+  --c-surface-sunken: rgba(15, 19, 27, 0.7);
+  --c-panel: rgba(15, 19, 27, 0.95);
+
+  --c-accent: #e2e8f0;
+  --c-accent-text: #0b0c10;
+  --c-warn-bg: rgba(120, 53, 15, 0.5);
+  --c-warn-text: #fde4b8;
+  --c-error-bg: rgba(69, 10, 10, 0.6);
+  --c-error-text: #fca5a5;
+
+  --c-hairline: rgba(255, 255, 255, 0.1);
+  --c-hairline-soft: rgba(255, 255, 255, 0.05);
+  --c-hairline-strong: rgba(255, 255, 255, 0.25);
+  --c-veil: rgba(255, 255, 255, 0.1);
+  --c-veil-strong: rgba(255, 255, 255, 0.2);
+  --c-scrim: rgba(0, 0, 0, 0.55);
+
+  /* Ambient lighting: a white spotlight overhead and a colour field pooling
+     at the horizon. */
+  --c-sheen: rgba(255, 255, 255, 0.22);
+  --c-field-top: rgba(255, 255, 255, 0.11);
+  --c-field-indigo: rgba(109, 118, 255, 0.07);
+  --c-field-violet: rgba(192, 132, 252, 0.09);
+  --c-field-bottom: rgba(94, 234, 212, 0.13);
+  --c-glass: rgba(255, 255, 255, 0.06);
+
+  --r-sm: 0.375rem;
+  --r-md: 0.5rem;
+  --r-lg: 0.75rem;
+  --r-xl: 1rem;
+
+  --t-fast: 150ms ease;
+  --t-sweep: 700ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+/*
+ * The video is not an element on this page. mpv renders it into a GtkGLArea
+ * underneath the webview, so anything here that paints an opaque pixel hides
+ * the film: without a transparent document the player shows a blank page.
+ */
+html,
+body,
+#app {
+  background: transparent;
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  color: var(--c-text);
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    "Helvetica Neue",
+    sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+p,
+dl,
+dd,
+figure {
+  margin: 0;
+}
+
+ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+*,
+*::before,
+*::after {
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: default;
+}
+
+input[type="text"],
+input[type="search"],
+textarea,
+[contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
+  cursor: text;
+}
+
+input[type="range"],
+select {
+  cursor: pointer;
+}
+
+/* The reset above hands every element `default`, so the pointer set on a
+   button was lost the moment the cursor reached the glyph inside it. */
+button,
+button * {
+  cursor: pointer;
+}
+
+button:disabled,
+button:disabled * {
+  cursor: default;
+}
+
+/* WebKit starts a native "drag this text/image" gesture on mousedown, which
+   hijacked the window drag on headings and covers. */
+* {
+  -webkit-user-drag: none;
+}
+
+::selection {
+  background: #2b3444;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

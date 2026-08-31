@@ -1,0 +1,124 @@
+# Flatpak is Murk's primary universal channel: it covers all five target
+# distributions at once, and it is the answer for users on an LTS release that
+# still ships libmpv.so.1, which the native packages cannot support.
+#
+# STATUS: written, not yet built. flatpak-builder was not available in the
+# environment this was authored in, so treat the module versions below as a
+# starting point and expect one or two rounds of adjustment. See README.md in
+# this directory for what to check first.
+app-id: io.murk.player
+runtime: org.gnome.Platform
+runtime-version: "48"
+sdk: org.gnome.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+  - org.freedesktop.Sdk.Extension.node22
+# mpv needs a full ffmpeg; the runtime ships a reduced one.
+add-extensions:
+  org.freedesktop.Platform.ffmpeg-full:
+    directory: lib/ffmpeg
+    version: "24.08"
+    add-ld-path: .
+    no-autodownload: false
+command: murk
+
+finish-args:
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+  - --socket=pulseaudio
+  # Without direct rendering there is no hardware decoding, and 4K HEVC turns
+  # the laptop into a space heater.
+  - --device=dri
+  # Deliberately no --filesystem=host. Folders reach Murk through the portal,
+  # which means the sandbox does privacy work too: the application can see
+  # nothing but the folders the user opened by hand.
+  - --talk-name=org.freedesktop.portal.Desktop
+  # GTK routes screensaver inhibition through the portal.
+  - --talk-name=org.freedesktop.portal.Inhibit
+
+build-options:
+  append-path: /usr/lib/sdk/rust-stable/bin:/usr/lib/sdk/node22/bin
+  prepend-ld-library-path: /app/lib/ffmpeg
+
+cleanup-commands:
+  - mkdir -p /app/lib/ffmpeg
+
+modules:
+  - name: libplacebo
+    buildsystem: meson
+    config-opts:
+      - -Dvulkan=disabled
+      - -Ddemos=false
+    sources:
+      # Git tags rather than archives with checksums: a wrong hash fails the
+      # build in a way that looks like a network error, and these are not
+      # hashes anybody can verify by reading them.
+      - type: git
+        url: https://code.videolan.org/videolan/libplacebo.git
+        tag: v7.349.0
+
+  - name: libass
+    # The GNOME runtime does not ship libass, and mpv without it means no
+    # subtitles at all.
+    buildsystem: autotools
+    sources:
+      - type: git
+        url: https://github.com/libass/libass.git
+        tag: 0.17.4
+
+  - name: libmpv
+    # mpv moved from waf to meson in 0.37; anything older on the internet is
+    # out of date.
+    buildsystem: meson
+    config-opts:
+      - -Dlibmpv=true
+      - -Dcplayer=false
+      - -Dmanpage-build=disabled
+      - -Dlibarchive=disabled
+    sources:
+      - type: git
+        url: https://github.com/mpv-player/mpv.git
+        tag: v0.40.0
+
+  - name: murk
+    buildsystem: simple
+    build-options:
+      build-args:
+        # flatpak-builder normally builds offline. Either keep this and build
+        # with --allow-network, or vendor both dependency trees first; see
+        # README.md in this directory.
+        - --share=network
+      # The node SDK extension is mounted read-only, so pnpm cannot be
+      # installed into it; give npm a writable prefix inside the build dir.
+      append-path: /usr/lib/sdk/rust-stable/bin:/usr/lib/sdk/node22/bin:/run/build/murk/npm/bin
+      env:
+        CARGO_HOME: /run/build/murk/cargo
+        NPM_CONFIG_PREFIX: /run/build/murk/npm
+        # pnpm refuses to touch a modules directory non-interactively otherwise.
+        CI: "true"
+    build-commands:
+      - npm install -g pnpm@11
+      - pnpm install --frozen-lockfile
+      # Through the Tauri CLI, not `pnpm build` plus a bare `cargo build`: the
+      # CLI is what makes the binary embed ../dist. A plain cargo build leaves
+      # it pointing at the dev server, and the window shows nothing but
+      # "Could not connect to localhost".
+      - pnpm tauri build --no-bundle
+      - install -Dm755 src-tauri/target/release/murk /app/bin/murk
+      - install -Dm644 packaging/flatpak/io.murk.player.desktop
+        /app/share/applications/io.murk.player.desktop
+      - install -Dm644 src-tauri/icons/128x128.png
+        /app/share/icons/hicolor/128x128/apps/io.murk.player.png
+      - install -Dm644 packaging/flatpak/io.murk.player.metainfo.xml
+        /app/share/metainfo/io.murk.player.metainfo.xml
+    sources:
+      - type: dir
+        path: ../..
+        # Build outputs from a local checkout must not leak into the sandbox.
+        skip:
+          - node_modules
+          - dist
+          - src-tauri/target
+          - .flatpak-builder
+          - .git

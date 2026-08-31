@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.murk.player</id>
+  <name>Murk</name>
+  <summary>Watch without spoilers</summary>
+  <summary xml:lang="ru">Смотреть без спойлеров</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-2.0-or-later</project_license>
+  <description>
+    <p>
+      Watching a series in an ordinary player spoils it. The progress bar says
+      the resolution is three minutes away. The window title names the episode.
+      A "12/24" counter says the season has barely started.
+    </p>
+    <p xml:lang="ru">
+      Просмотр сериала в обычном плеере его портит. Полоса просмотра говорит,
+      что до развязки три минуты. Заголовок окна называет серию. Счётчик
+      «12/24» сообщает, что сезон едва начался.
+    </p>
+    <p>
+      Murk shows none of it by default: no episode title or number, no season,
+      no total count, no seek bar, no position, running time or time remaining,
+      no chapter names. What is hidden is not merely hidden from view: it never
+      leaves the backend, so no layout bug and no open devtools window can
+      surface it.
+    </p>
+    <p xml:lang="ru">
+      Murk по умолчанию не показывает ничего из этого: ни названия и номера
+      серии, ни сезона, ни общего количества, ни полосы перемотки, ни позиции,
+      длительности и остатка времени, ни названий глав. Скрытое не просто убрано
+      с глаз — оно не покидает бэкенд, так что ни ошибка вёрстки, ни открытые
+      devtools его не покажут.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.murk.player.desktop</launchable>
+  <content_rating type="oars-1.1"/>
+</component>

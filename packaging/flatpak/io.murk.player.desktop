@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Murk
+Comment=Watch without spoilers
+Comment[ru]=Смотреть без спойлеров
+Keywords=video;player;series;spoiler;
+Keywords[ru]=видео;плеер;сериал;спойлер;
+Exec=murk
+Icon=io.murk.player
+Terminal=false
+Categories=AudioVideo;Video;Player;
+StartupWMClass=murk
