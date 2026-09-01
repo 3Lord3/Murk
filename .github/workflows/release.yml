@@ -72,7 +72,12 @@ jobs:
           node-version: 22
           cache: pnpm
       - name: Install build dependencies
-        run: sudo ./scripts/deps.sh --install
+        run: |
+          sudo ./scripts/deps.sh --install
+          # appimagetool runs desktop-file-validate over the AppDir during the
+          # repack and exits 1 if the binary is absent. Tauri's own bundling
+          # step does not need it, so this only shows up in scripts/appimage.sh.
+          sudo apt-get install -y desktop-file-utils
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
