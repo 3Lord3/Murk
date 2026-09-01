@@ -4,7 +4,7 @@
 
 **Watch the series, not the timeline.**
 
-<a href="https://github.com/3Lord3/murk/actions"><img alt="build" src="https://img.shields.io/github/actions/workflow/status/3Lord3/murk/ci.yml?style=for-the-badge&labelColor=0f131b&label=build"></a>
+<a href="https://github.com/3Lord3/Murk/actions"><img alt="build" src="https://img.shields.io/github/actions/workflow/status/3Lord3/Murk/ci.yml?style=for-the-badge&labelColor=0f131b&label=build"></a>
 <a href="#installation"><img alt="version" src="https://img.shields.io/badge/version-0.1.0-c084fc?style=for-the-badge&labelColor=0f131b"></a>
 <a href="#license"><img alt="license" src="https://img.shields.io/badge/license-GPL--2.0--or--later-e2e8f0?style=for-the-badge&labelColor=0f131b"></a>
 <a href="https://tauri.app"><img alt="Tauri 2" src="https://img.shields.io/badge/Tauri_2-6d76ff?style=for-the-badge&labelColor=0f131b&logo=tauri&logoColor=white"></a>
