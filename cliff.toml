@@ -7,7 +7,7 @@
 header = ""
 body = """
 {% for group, commits in commits | group_by(attribute="group") %}
-### {{ group | upper_first }}
+### {{ group | striptags | trim | upper_first }}
 {% for commit in commits %}
 - {% if commit.scope %}**{{ commit.scope }}:** {% endif %}{{ commit.message | upper_first }}\
 {% endfor %}
@@ -32,17 +32,17 @@ ignore_tags = "v[0-9].*-rc[0-9]*"
 sort_commits = "oldest"
 
 commit_parsers = [
-  { message = "^feat", group = "Features" },
-  { message = "^fix", group = "Bug fixes" },
-  { message = "^perf", group = "Performance" },
-  { message = "^refactor", group = "Refactoring" },
-  { message = "^doc", group = "Documentation" },
-  { message = "^test", group = "Testing" },
-  { message = "^(ci|build)", group = "Build and CI" },
+  { message = "^feat", group = "<!-- 0 -->Features" },
+  { message = "^fix", group = "<!-- 1 -->Bug fixes" },
+  { message = "^perf", group = "<!-- 2 -->Performance" },
+  { message = "^refactor", group = "<!-- 3 -->Refactoring" },
+  { message = "^doc", group = "<!-- 4 -->Documentation" },
+  { message = "^test", group = "<!-- 5 -->Testing" },
+  { message = "^(ci|build)", group = "<!-- 6 -->Build and CI" },
   # The packaging prefixes this repository already uses.
-  { message = "^(flatpak|appimage|packaging|deb|rpm)", group = "Packaging" },
+  { message = "^(flatpak|appimage|packaging|deb|rpm)", group = "<!-- 7 -->Packaging" },
   { message = "^chore\\(release\\)", skip = true },
-  { message = "^chore", group = "Miscellaneous" },
+  { message = "^chore", group = "<!-- 8 -->Miscellaneous" },
   { message = "^Merge", skip = true },
-  { message = ".*", group = "Other" },
+  { message = ".*", group = "<!-- 9 -->Other" },
 ]
