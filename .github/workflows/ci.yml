@@ -71,15 +71,9 @@ jobs:
           - { name: Ubuntu, image: "ubuntu:rolling", bootstrap: "apt-get update -qq && apt-get install -y --no-install-recommends curl ca-certificates git" }
           - { name: Fedora, image: "fedora:latest", bootstrap: "dnf install -y curl ca-certificates git" }
           - { name: Arch, image: "archlinux:latest", bootstrap: "pacman -Sy --noconfirm curl ca-certificates git" }
-          # ALT is the awkward one and therefore the one most worth testing: it
-          # has apt-get but rpm-flavoured, ALT-specific package names and no
-          # ID_LIKE, so every "has apt ⇒ Debian" heuristic gets it wrong.
-          # glibc-pthread ships libpthread.so.0, which ALT's glibc (>= 2.34)
-          # merged into libc and no longer provides. Without it the runner's
-          # Node 24 cannot even start and every `uses:` action dies before the
-          # bootstrap step, which is why it has to be installed here and not in
-          # scripts/deps.sh (that runs after checkout).
-          - { name: ALT Sisyphus, image: "alt:sisyphus", bootstrap: "apt-get update -qq && apt-get install -y curl ca-certificates git glibc-pthread" }
+          # ALT is deliberately absent: it is the maintainer's own distribution,
+          # so it is covered by building there by hand, and its container was
+          # the slowest leg of this matrix by a wide margin.
     steps:
       - name: Bootstrap the container
         run: ${{ matrix.bootstrap }}
