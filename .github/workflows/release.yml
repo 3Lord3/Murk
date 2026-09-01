@@ -142,6 +142,20 @@ jobs:
     # release draft off an untagged commit would be noise.
     if: startsWith(github.ref, 'refs/tags/') || inputs.tag != ''
     steps:
+      # The notes come from the commit log, so the whole history has to be
+      # here: a shallow clone would silently produce an empty changelog.
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+      - name: Generate the release notes
+        uses: orhun/git-cliff-action@v4
+        id: changelog
+        with:
+          config: cliff.toml
+          args: --latest --strip header
+        env:
+          OUTPUT: RELEASE_NOTES.md
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
@@ -155,7 +169,11 @@ jobs:
         with:
           tag_name: ${{ inputs.tag || github.ref_name }}
           draft: true
-          generate_release_notes: true
+          # The draft opens with these notes already in the editor, so a
+          # release that deserves a written introduction — the first one, or
+          # anything with a migration in it — can simply be edited before
+          # publishing.
+          body_path: RELEASE_NOTES.md
           files: |
             artifacts/**/*.deb
             artifacts/**/*.rpm
