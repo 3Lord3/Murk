@@ -9,8 +9,10 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing tag to build
-        required: true
+        # Empty means "build whatever ref this was dispatched from", which is
+        # how a branch is test-built before its tag exists.
+        description: Existing tag to build (blank = this branch)
+        required: false
 
 permissions:
   contents: write
@@ -89,8 +91,9 @@ jobs:
           if-no-files-found: error
 
   # Flathub submission is a different thing; this only produces a single-file
-  # bundle a user can `flatpak install` directly. The manifest still fetches
-  # from the network during the build, so it is built with --allow-network.
+  # bundle a user can `flatpak install` directly. The manifest carries
+  # `--share=network` in its own build-args, so no CLI flag is needed (and
+  # --allow-network does not exist in the runner's flatpak-builder).
   flatpak:
     name: Flatpak bundle
     runs-on: ubuntu-latest
@@ -112,7 +115,7 @@ jobs:
             org.freedesktop.Sdk.Extension.node22//24.08
       - name: Build
         run: |
-          sudo flatpak-builder --force-clean --allow-network \
+          sudo flatpak-builder --force-clean \
             --repo=repo --install-deps-from=flathub \
             build packaging/flatpak/io.murk.player.yml
       - name: Bundle
@@ -130,6 +133,9 @@ jobs:
     name: publish
     needs: [native, appimage, flatpak]
     runs-on: ubuntu-latest
+    # A branch dispatch is a build check: the artifacts are enough, and a
+    # release draft off an untagged commit would be noise.
+    if: startsWith(github.ref, 'refs/tags/') || inputs.tag != ''
     steps:
       - uses: actions/download-artifact@v4
         with:
