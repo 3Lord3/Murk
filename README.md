@@ -78,9 +78,11 @@ or fix a translation, open a pull request against the catalogues; see
 
 # Installation
 
-Murk targets Linux and is pre-release (v0.1.0). Nothing is published to a
-repository yet, so the way to get it is to build it, which takes three
-commands:
+Murk targets Linux and is pre-release (v0.1.0). Ready-made packages for every
+channel below — `.deb`, `.rpm`, AppImage and a Flatpak bundle, with
+`SHA256SUMS` — are attached to each [release](https://github.com/3Lord3/Murk/releases/latest).
+Nothing is published to a distribution repository or to Flathub yet, so the
+other way to get it is to build it, which takes three commands:
 
 ```sh
 ./scripts/deps.sh --install   # system libraries; --check just lists them
