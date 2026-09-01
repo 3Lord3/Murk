@@ -1,0 +1,153 @@
+name: Release
+
+# Tag-driven: `git tag v0.1.0 && git push origin v0.1.0` builds every Linux
+# format and attaches it to a GitHub release. The manual trigger exists so a
+# failed publish can be retried without moving the tag.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to build
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # deb and rpm come straight out of the bundler, and the soname check that
+  # guards the dependency lists in CI runs here too: a release must not ship a
+  # package whose dependencies name distribution packages.
+  native:
+    name: deb + rpm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install build dependencies
+        run: sudo ./scripts/deps.sh --install
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm tauri build --bundles deb,rpm
+      - name: Dependencies must come from sonames, not package names
+        run: |
+          sudo apt-get install -y rpm
+          ./scripts/check-package-deps.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native
+          path: |
+            src-tauri/target/release/bundle/deb/*.deb
+            src-tauri/target/release/bundle/rpm/*.rpm
+          if-no-files-found: error
+
+  # Separate job because scripts/appimage.sh repacks the AppDir by hand: it
+  # rewrites the GTK AppRun hook so a Wayland session is not dragged through
+  # XWayland, and it repacks with zstd.
+  appimage:
+    name: AppImage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install build dependencies
+        run: sudo ./scripts/deps.sh --install
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: pnpm install --frozen-lockfile
+      # The script needs linuxdeploy-plugin-appimage.AppImage in the Tauri
+      # cache, which only a plain bundler run fetches. FUSE is not available on
+      # the runner, hence the extract-and-run fallback.
+      - name: Prime the bundler cache
+        run: APPIMAGE_EXTRACT_AND_RUN=1 pnpm tauri build --bundles appimage
+      - run: APPIMAGE_EXTRACT_AND_RUN=1 ./scripts/appimage.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: appimage
+          path: src-tauri/target/release/bundle/appimage/*.AppImage
+          if-no-files-found: error
+
+  # Flathub submission is a different thing; this only produces a single-file
+  # bundle a user can `flatpak install` directly. The manifest still fetches
+  # from the network during the build, so it is built with --allow-network.
+  flatpak:
+    name: Flatpak bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - name: Install flatpak-builder
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y flatpak flatpak-builder
+          sudo flatpak remote-add --if-not-exists flathub \
+            https://dl.flathub.org/repo/flathub.flatpakrepo
+      - name: Install runtime and SDKs
+        run: |
+          sudo flatpak install -y flathub \
+            org.gnome.Platform//48 org.gnome.Sdk//48 \
+            org.freedesktop.Sdk.Extension.rust-stable//24.08 \
+            org.freedesktop.Sdk.Extension.node22//24.08
+      - name: Build
+        run: |
+          sudo flatpak-builder --force-clean --allow-network \
+            --repo=repo --install-deps-from=flathub \
+            build packaging/flatpak/io.murk.player.yml
+      - name: Bundle
+        run: |
+          version=$(node -p "require('./package.json').version")
+          sudo flatpak build-bundle repo \
+            "Murk_${version}_x86_64.flatpak" io.murk.player
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flatpak
+          path: "*.flatpak"
+          if-no-files-found: error
+
+  publish:
+    name: publish
+    needs: [native, appimage, flatpak]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Checksums
+        run: |
+          find artifacts -type f -printf '%p\n' | sort
+          find artifacts -type f -exec sha256sum {} + \
+            | sed 's| .*/| |' > SHA256SUMS
+          cat SHA256SUMS
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          draft: true
+          generate_release_notes: true
+          files: |
+            artifacts/**/*.deb
+            artifacts/**/*.rpm
+            artifacts/**/*.AppImage
+            artifacts/**/*.flatpak
+            SHA256SUMS
