@@ -48,6 +48,11 @@ modules:
   - name: libplacebo
     buildsystem: meson
     config-opts:
+      # Without this meson picks the system default, which is lib64 on x86_64,
+      # and the .pc file lands where nothing looks for it. Recent
+      # flatpak-builder passes --libdir=lib itself; 1.4.x does not, so the
+      # build only worked on the newer one until this was pinned here.
+      - --libdir=lib
       - -Dvulkan=disabled
       - -Ddemos=false
     sources:
@@ -72,6 +77,8 @@ modules:
     # out of date.
     buildsystem: meson
     config-opts:
+      # Same reason as libplacebo: keep libmpv.so and its .pc in /app/lib.
+      - --libdir=lib
       - -Dlibmpv=true
       - -Dcplayer=false
       - -Dmanpage-build=disabled
