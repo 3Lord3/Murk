@@ -1,0 +1,48 @@
+# Release notes are generated from the commit log, so the log is the source of
+# truth for what a release contains. Anything that does not match a parser
+# below still shows up, under "Other" — silence would be worse than an
+# untidy heading, because a missing entry is invisible.
+
+[changelog]
+header = ""
+body = """
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group | upper_first }}
+{% for commit in commits %}
+- {% if commit.scope %}**{{ commit.scope }}:** {% endif %}{{ commit.message | upper_first }}\
+{% endfor %}
+{% endfor %}
+"""
+trim = true
+footer = ""
+
+[git]
+conventional_commits = true
+# The history predates the convention, and prefixes like `flatpak:` are scopes
+# in spirit rather than types. Dropping them would quietly lose real changes,
+# so they are parsed below instead of filtered out.
+filter_unconventional = false
+filter_commits = false
+protect_breaking_commits = true
+tag_pattern = "v[0-9]*"
+# Release candidates are build checks, not releases. This has to be
+# ignore_tags rather than skip_tags: skip_tags drops the tag *and* the commits
+# under it, which with an rc as the newest tag makes `--latest` come out empty.
+ignore_tags = "v[0-9].*-rc[0-9]*"
+sort_commits = "oldest"
+
+commit_parsers = [
+  { message = "^feat", group = "Features" },
+  { message = "^fix", group = "Bug fixes" },
+  { message = "^perf", group = "Performance" },
+  { message = "^refactor", group = "Refactoring" },
+  { message = "^doc", group = "Documentation" },
+  { message = "^test", group = "Testing" },
+  { message = "^(ci|build)", group = "Build and CI" },
+  # The packaging prefixes this repository already uses.
+  { message = "^(flatpak|appimage|packaging|deb|rpm)", group = "Packaging" },
+  { message = "^chore\\(release\\)", skip = true },
+  { message = "^chore", group = "Miscellaneous" },
+  { message = "^Merge", skip = true },
+  { message = ".*", group = "Other" },
+]
