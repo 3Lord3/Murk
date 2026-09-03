@@ -13,3 +13,6 @@ src-tauri/gen/
 # IDE
 .idea/
 .vscode/
+
+# scripts/deps.ps1 unpacks the libmpv development files here
+src-tauri/mpv/
