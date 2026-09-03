@@ -42,8 +42,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -99,8 +99,8 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -117,7 +117,7 @@ jobs:
         run: pnpm tauri build --bundles nsis
         env:
           MPV_LIB_DIR: ${{ github.workspace }}\src-tauri\mpv\lib
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         with:
           name: windows-ci
           path: src-tauri/target/release/bundle/nsis/*.exe
@@ -128,8 +128,8 @@ jobs:
     needs: [tests, frontend]
     steps:
       - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -142,7 +142,7 @@ jobs:
         run: |
           sudo apt-get install -y rpm
           ./scripts/check-package-deps.sh
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         with:
           name: packages
           path: |
