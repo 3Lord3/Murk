@@ -90,6 +90,38 @@ jobs:
         run: mkdir -p dist && touch dist/index.html
       - run: cargo build --manifest-path src-tauri/Cargo.toml
 
+  # Windows is built here rather than only at release time for the same reason
+  # the distro matrix exists: the platform-specific half of the player (the mpv
+  # child window, the import library, the DLL that has to be bundled) breaks
+  # silently, and a tag is the worst moment to find out.
+  windows:
+    name: build on Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      # lib.exe, for turning mpv.def into the import library the linker wants.
+      - uses: ilammy/msvc-dev-cmd@v1
+      - name: Fetch libmpv
+        run: pwsh -File scripts/deps.ps1
+      - run: pnpm install --frozen-lockfile
+      - name: Build
+        run: pnpm tauri build --bundles nsis
+        env:
+          MPV_LIB_DIR: ${{ github.workspace }}\src-tauri\mpv\lib
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-ci
+          path: src-tauri/target/release/bundle/nsis/*.exe
+
   packages:
     name: packages
     runs-on: ubuntu-latest

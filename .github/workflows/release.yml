@@ -134,9 +134,43 @@ jobs:
           path: "*.flatpak"
           if-no-files-found: error
 
+  # Windows produces two installers from one build: NSIS for a plain
+  # double-click install, MSI for deployment through group policy.
+  windows:
+    name: Windows installers
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - uses: ilammy/msvc-dev-cmd@v1
+      - name: Fetch libmpv
+        run: pwsh -File scripts/deps.ps1
+      - run: pnpm install --frozen-lockfile
+      - name: Build
+        run: pnpm tauri build --bundles nsis,msi
+        env:
+          MPV_LIB_DIR: ${{ github.workspace }}\src-tauri\mpv\lib
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: |
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/msi/*.msi
+          if-no-files-found: error
+
   publish:
     name: publish
-    needs: [native, appimage, flatpak]
+    needs: [native, appimage, flatpak, windows]
     runs-on: ubuntu-latest
     # A branch dispatch is a build check: the artifacts are enough, and a
     # release draft off an untagged commit would be noise.
@@ -179,4 +213,6 @@ jobs:
             artifacts/**/*.rpm
             artifacts/**/*.AppImage
             artifacts/**/*.flatpak
+            artifacts/**/*.exe
+            artifacts/**/*.msi
             SHA256SUMS
