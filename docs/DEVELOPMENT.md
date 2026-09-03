@@ -87,7 +87,8 @@ src-tauri/src/
     mod.rs             PlayerHandle, a safe API over libmpv
     surface.rs         PlayerSurface, the one trait a port has to implement
     surface_gtk.rs     Linux: GtkGLArea under the webview (Wayland and X11)
-    render.rs          GL entry points, framebuffer, scaling
+    surface_win.rs     Windows: an mpv-owned child window under the WebView2
+    render.rs          Linux: GL entry points, framebuffer, scaling
     events.rs          mpv's event stream → sanitised Tauri events
     inhibit.rs         keeping the screen awake
   library/
@@ -101,7 +102,7 @@ src-tauri/src/
   commands.rs          the #[tauri::command] surface
 ```
 
-### Why the render API instead of `--wid`
+### Why the render API on Linux and `--wid` on Windows
 
 mpv can either create a child window inside the host's window (`wid`) or render
 into a framebuffer the host provides (`vo=libmpv`). `wid` needs a window id to
@@ -113,11 +114,29 @@ other things for free:
   an ordinary widget and `GtkOverlay` stacks the webview above it;
 * mpv creates no window of its own, so there is no second task-bar entry with
   a filename in it, one metadata leak fewer;
-* Windows, macOS and Android take the same GL path, changing only where the
+* macOS and Android can take the same GL path later, changing only where the
   context comes from.
 
 The Wayland/X11 branch is chosen **at runtime** by asking GDK what kind of
 display it opened, so one binary works in both kinds of session.
+
+Windows goes the other way, because there the argument reverses. Win32 does
+have a window id, and handing one over means mpv renders on its own thread with
+its own D3D11 swap chain: no GL context of ours to create, resize and destroy,
+no frame callback on the UI thread, and `hwdec=auto-safe` reaching d3d11va with
+no interop dance. The taskbar leak that `wid` risks on X11 does not arise
+either — a `WS_CHILD` window has no taskbar entry and no title.
+
+`surface_win.rs` creates that child window, keeps it at the bottom of the
+z-order under the (transparent) WebView2 and resizes it with the window. It has
+to exist *before* the mpv instance does, because `wid` is only read while mpv
+creates its video output; that is why `PlayerHandle::new` takes the handle as
+an argument rather than the surface setting a property afterwards. The child is
+`WS_DISABLED`, so no input ever reaches it.
+
+Nothing about the privacy boundary changes with the platform: what is hidden is
+hidden in Rust, before the IPC payload is built, and `surface_*` only decides
+where pixels land.
 
 ### Screensaver
 
@@ -126,6 +145,11 @@ cannot talk to the screensaver and its `stop-screensaver` option does nothing.
 Murk calls `gtk_application_inhibit` itself (`player/inhibit.rs`), which GTK
 routes through xdg-desktop-portal and therefore works on Wayland, on X11 and
 inside Flatpak. Without it the screen goes dark in the middle of an episode.
+
+Windows has the same hole for a related reason — the window is ours, not mpv's
+— and the same file answers it with `SetThreadExecutionState`. The request is
+per thread and dies with it, so it is made on the main thread, which
+`set_inhibited` was already hopping to for GTK's sake.
 
 ## Building
 
@@ -149,6 +173,29 @@ libmpv must be **client API 2.x** (`libmpv.so.2`, mpv ≥ 0.36). `build.rs` fail
 with that sentence rather than with a wall of linker errors. Distributions
 still on `libmpv.so.1` (Ubuntu 22.04, Debian 12) are served by the Flatpak
 build (see `packaging/flatpak/`).
+
+### Windows
+
+There is no pkg-config and no package manager to ask, so `scripts/deps.ps1`
+fetches libmpv itself and produces the piece Windows cannot do without: an
+import library. `libmpv2-sys` emits `cargo:rustc-link-lib=mpv`, and MSVC cannot
+link against a DLL, so `mpv.def` is turned into `mpv.lib` with `lib.exe`
+(`/name:libmpv-2.dll`, or the program would look for a `mpv.dll` that does not
+exist). `build.rs` reads `MPV_LIB_DIR` for the directory that holds it.
+
+```powershell
+pwsh -File scripts/deps.ps1
+$env:MPV_LIB_DIR = "$PWD\src-tauri\mpv\lib"
+$env:PATH = "$PWD\src-tauri\mpv\bin;$env:PATH"
+pnpm install
+pnpm tauri dev
+```
+
+The `PATH` entry is for development only: `tauri.windows.conf.json` declares
+`libmpv-2.dll` as a bundled resource, so an installed copy finds it next to
+`murk.exe`. Requirements beyond the Linux ones: the MSVC Rust toolchain, the
+Visual Studio build tools for `lib.exe`, 7-Zip to unpack the archive, and
+WebView2 (already present on Windows 11).
 
 ## Packaging
 
@@ -199,4 +246,7 @@ position and no duration in it.
 * **frontend**: i18n catalogue parity and `pnpm build` (type check);
 * **distros**: a plain `cargo build` inside containers for Debian, Ubuntu,
   Fedora, Arch and ALT, so a renamed package is caught the day it is renamed;
+* **windows**: `deps.ps1` and `tauri build --bundles nsis` on a Windows
+  runner, because the platform-specific half of the player fails silently and a
+  tag is the worst moment to discover it;
 * **packages**: `tauri build --bundles deb,rpm` plus the dependency check.

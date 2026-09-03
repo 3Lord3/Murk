@@ -2,11 +2,19 @@
 
 pub mod events;
 pub mod inhibit;
-pub mod render;
 pub mod surface;
+
+// The GL loader is the Linux path's business: it exists to feed libmpv's
+// render API through libepoxy. The Windows surface lets mpv own the drawing,
+// so nothing there needs a loader.
+#[cfg(target_os = "linux")]
+pub mod render;
 
 #[cfg(target_os = "linux")]
 pub mod surface_gtk;
+
+#[cfg(target_os = "windows")]
+pub mod surface_win;
 
 use anyhow::{Context, Result};
 use libmpv2::{mpv_error, Error as MpvError, Mpv};
@@ -22,16 +30,11 @@ use crate::privacy::{HidingProfile, PlaybackState};
 /// never asked it to draw.
 const MPV_OPTIONS: &[(&str, &str)] = &[
     // -- functional ---------------------------------------------------------
-    // Required for the render API: mpv owns no window and hands us frames.
-    ("vo", "libmpv"),
-    ("gpu-api", "opengl"),
     // Not a hard `vaapi`: Fedora ships mesa without some patented decoders and
     // NVIDIA takes a different path entirely. `auto-safe` quietly drops to
-    // software decoding instead of showing a black frame.
+    // software decoding instead of showing a black frame. On Windows the same
+    // value picks d3d11va.
     ("hwdec", "auto-safe"),
-    // Without this, `render()` blocks until the frame's presentation time. We
-    // call it from the GTK main thread, so that blocks the whole interface.
-    ("video-timing-offset", "0"),
     // End of file is Murk's business (auto-advance), not mpv's.
     ("keep-open", "yes"),
     ("terminal", "no"),
@@ -57,6 +60,39 @@ const MPV_OPTIONS: &[(&str, &str)] = &[
 /// Options that some libmpv builds do not know, and whose absence means the
 /// thing they switch off is not there either.
 const OPTIONAL_MPV_OPTIONS: &[&str] = &["osc"];
+
+/// How the video reaches the screen, which is the one thing that differs per
+/// platform. See [`surface`] for the rest of that story.
+///
+/// Linux drives the render API by hand: mpv owns no window, hands us frames,
+/// and `surface_gtk` composites them under the webview.
+#[cfg(target_os = "linux")]
+const MPV_VIDEO_OPTIONS: &[(&str, &str)] = &[
+    // Required for the render API: mpv owns no window and hands us frames.
+    ("vo", "libmpv"),
+    ("gpu-api", "opengl"),
+    // Without this, `render()` blocks until the frame's presentation time. We
+    // call it from the GTK main thread, so that blocks the whole interface.
+    ("video-timing-offset", "0"),
+];
+
+/// Windows takes the other route mpv offers: it renders into a child window we
+/// hand it (`wid`, set in [`PlayerHandle::new`]), on its own thread, with its
+/// own D3D11 swap chain. There is no GL context of ours to keep current and no
+/// frame callback to service, so `video-timing-offset` stays at mpv's default
+/// and mpv presents on its own schedule.
+#[cfg(target_os = "windows")]
+const MPV_VIDEO_OPTIONS: &[(&str, &str)] = &[
+    ("vo", "gpu"),
+    ("gpu-api", "d3d11"),
+    // The child window is behind the webview and must never take focus or draw
+    // a cursor of its own: every pointer and key event belongs to the Vue layer.
+    ("input-cursor", "no"),
+    ("cursor-autohide", "no"),
+];
+
+#[cfg(not(any(target_os = "linux", target_os = "windows")))]
+const MPV_VIDEO_OPTIONS: &[(&str, &str)] = &[];
 
 /// Which episode is on screen, so progress can be written without the frontend
 /// ever naming a file.
@@ -144,19 +180,39 @@ fn force_c_numeric_locale() {
 fn force_c_numeric_locale() {}
 
 impl PlayerHandle {
-    pub fn new(profile: HidingProfile) -> Result<Self> {
+    /// `embed_window` is the native handle of the window mpv should draw into,
+    /// for platforms where mpv owns the drawing (Windows: the `HWND` of the
+    /// child window `surface_win` creates). Platforms that drive the render
+    /// API themselves pass `None`.
+    ///
+    /// It is a constructor parameter and not a later `set_property` because
+    /// `wid` is only read when the video output is created, which happens
+    /// inside `mpv_initialize`: set afterwards it is silently ignored and the
+    /// video appears in a window of its own.
+    pub fn new(profile: HidingProfile, embed_window: Option<i64>) -> Result<Self> {
         force_c_numeric_locale();
 
+        tracing::debug!(?embed_window, options = ?MPV_OPTIONS, video_options = ?MPV_VIDEO_OPTIONS, "initialising mpv");
         let mpv = Mpv::with_initializer(|init| {
-            for (key, value) in MPV_OPTIONS {
+            if let Some(wid) = embed_window {
+                tracing::debug!(wid, "setting mpv wid");
+                init.set_option("wid", wid)?;
+            }
+            for (key, value) in MPV_OPTIONS.iter().chain(MPV_VIDEO_OPTIONS) {
                 match init.set_option(key, *value) {
                     Ok(()) => {}
                     // A libmpv built without the cplayer frontend has no OSC to
                     // switch off, and reports the option as unknown. Refusing to
                     // start over an absent spoiler source would be backwards.
                     Err(MpvError::Raw(mpv_error::OptionNotFound))
-                        if OPTIONAL_MPV_OPTIONS.contains(key) => {}
-                    Err(e) => return Err(e),
+                        if OPTIONAL_MPV_OPTIONS.contains(key) =>
+                    {
+                        tracing::debug!(%key, "optional mpv option not supported by this build");
+                    }
+                    Err(e) => {
+                        tracing::error!(%key, %value, "setting mpv option failed: {e}");
+                        return Err(e);
+                    }
                 }
             }
             Ok(())
@@ -169,6 +225,13 @@ impl PlayerHandle {
         )?;
 
         let mpv: &'static Mpv = Box::leak(Box::new(mpv));
+
+        tracing::info!(
+            vo = ?mpv.get_property::<String>("vo"),
+            hwdec = ?mpv.get_property::<String>("hwdec"),
+            gpu_api = ?mpv.get_property::<String>("gpu-api"),
+            "mpv initialised"
+        );
 
         let volume = mpv.get_property::<f64>("volume").unwrap_or(100.0);
         let state = PlaybackState {
@@ -239,6 +302,10 @@ impl PlayerHandle {
     pub fn load_file(&self, path: &Path, start_ms: i64) -> Result<()> {
         let path = path.to_str().context("path is not valid UTF-8")?;
 
+        // The path is logged: this is a local, opt-in debug log (see `fail`
+        // above), not something that reaches the frontend or a report.
+        tracing::debug!(path, start_ms, "loading file into mpv");
+
         // `start` is read when the next file begins. Setting it here and
         // clearing it afterwards keeps absolute positioning entirely inside
         // Rust.
@@ -252,7 +319,13 @@ impl PlayerHandle {
 
         // `mpv_command` takes an argument vector, so the path goes through
         // unquoted and unescaped: no string mangling for spaces or quotes.
-        self.mpv.command("loadfile", &[path, "replace"])?;
+        match self.mpv.command("loadfile", &[path, "replace"]) {
+            Ok(()) => tracing::debug!("loadfile command accepted"),
+            Err(e) => {
+                tracing::error!("loadfile command failed: {e}");
+                return Err(e.into());
+            }
+        }
         Ok(())
     }
 
@@ -389,7 +462,7 @@ mod tests {
             .iter()
             .any(|name| unsafe { !libc::setlocale(libc::LC_NUMERIC, name.as_ptr()).is_null() });
 
-        let player = PlayerHandle::new(HidingProfile::standard());
+        let player = PlayerHandle::new(HidingProfile::standard(), None);
 
         // Restore, so test ordering in this process cannot matter.
         unsafe { libc::setlocale(libc::LC_NUMERIC, c"C".as_ptr()) };

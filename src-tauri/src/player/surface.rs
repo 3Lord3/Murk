@@ -8,7 +8,7 @@
 //! | platform | implementation |
 //! |---|---|
 //! | Linux    | `surface_gtk`: `GtkGLArea` under the webview (Wayland and X11) |
-//! | Windows  | a WGL context on the WebView2 host window |
+//! | Windows  | `surface_win`: an mpv-owned child window under the WebView2 |
 //! | macOS    | `NSOpenGLContext`, or Metal interop |
 //! | Android  | GLES on a `SurfaceView` |
 
@@ -19,7 +19,8 @@ pub trait PlayerSurface {
     /// start rendering into it.
     fn attach(&self, window: &tauri::WebviewWindow) -> Result<()>;
 
-    /// Render one frame into `fbo`, sized in device pixels.
+    /// Render one frame into `fbo`, sized in device pixels. A platform where
+    /// mpv presents on its own schedule (Windows) has nothing to do here.
     fn render_frame(&self, fbo: i32, width: i32, height: i32) -> Result<()>;
 
     /// Tear down the render context. Must run while the GL context is still
