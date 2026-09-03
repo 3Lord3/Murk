@@ -205,7 +205,8 @@ impl PlayerHandle {
                     // switch off, and reports the option as unknown. Refusing to
                     // start over an absent spoiler source would be backwards.
                     Err(MpvError::Raw(mpv_error::OptionNotFound))
-                        if OPTIONAL_MPV_OPTIONS.contains(key) => {
+                        if OPTIONAL_MPV_OPTIONS.contains(key) =>
+                    {
                         tracing::debug!(%key, "optional mpv option not supported by this build");
                     }
                     Err(e) => {
