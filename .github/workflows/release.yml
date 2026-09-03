@@ -32,7 +32,7 @@ jobs:
         with:
           ref: ${{ inputs.tag || github.ref }}
       - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: pnpm
@@ -48,7 +48,7 @@ jobs:
         run: |
           sudo apt-get install -y rpm
           ./scripts/check-package-deps.sh
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: native
           path: |
@@ -67,7 +67,7 @@ jobs:
         with:
           ref: ${{ inputs.tag || github.ref }}
       - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: pnpm
@@ -89,7 +89,7 @@ jobs:
       - name: Prime the bundler cache
         run: APPIMAGE_EXTRACT_AND_RUN=1 pnpm tauri build --bundles appimage
       - run: APPIMAGE_EXTRACT_AND_RUN=1 ./scripts/appimage.sh
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: appimage
           path: src-tauri/target/release/bundle/appimage/*.AppImage
@@ -128,7 +128,7 @@ jobs:
           version=$(node -p "require('./package.json').version")
           sudo flatpak build-bundle repo \
             "Murk_${version}_x86_64.flatpak" io.murk.player
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: flatpak
           path: "*.flatpak"
@@ -144,7 +144,7 @@ jobs:
         with:
           ref: ${{ inputs.tag || github.ref }}
       - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: pnpm
@@ -160,7 +160,7 @@ jobs:
         run: pnpm tauri build --bundles nsis,msi
         env:
           MPV_LIB_DIR: ${{ github.workspace }}\src-tauri\mpv\lib
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: windows
           path: |
@@ -190,7 +190,7 @@ jobs:
           args: --latest --strip header
         env:
           OUTPUT: RELEASE_NOTES.md
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           path: artifacts
       - name: Checksums
