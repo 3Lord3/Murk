@@ -15,6 +15,8 @@
 
 use std::sync::atomic::{AtomicU32, Ordering};
 use tauri::AppHandle;
+#[cfg(target_os = "linux")]
+use tauri::Manager;
 
 /// The inhibit cookie, or 0 for "not inhibiting".
 static COOKIE: AtomicU32 = AtomicU32::new(0);
