@@ -103,7 +103,11 @@ fn silence_benign_glib_critical() {
     }
 }
 
-fn build_state(app: &tauri::App) -> Result<AppState> {
+/// `embed_window` is the native handle mpv should render into, on platforms
+/// where mpv owns the drawing; see [`player::PlayerHandle::new`]. It has to be
+/// known here, before the mpv instance is created, which is why the video
+/// window is made first and the surface only attached afterwards.
+fn build_state(app: &tauri::App, embed_window: Option<i64>) -> Result<AppState> {
     let data_dir = app
         .path()
         .app_data_dir()
@@ -122,7 +126,7 @@ fn build_state(app: &tauri::App) -> Result<AppState> {
         .unwrap_or_default();
     tracing::info!("hiding profile: {}", profile.id);
 
-    let player = PlayerHandle::new(profile)?;
+    let player = PlayerHandle::new(profile, embed_window)?;
 
     Ok(AppState {
         player,
@@ -146,7 +150,9 @@ pub fn run() {
     silence_benign_glib_critical();
 
     // libmpv resolves GL entry points through a callback, so the loader has to
-    // be standing before any render context is created.
+    // be standing before any render context is created. Windows hands mpv a
+    // window instead of a framebuffer, so there is no loader to stand up.
+    #[cfg(target_os = "linux")]
     if let Err(e) = player::render::init_gl_loader() {
         eprintln!("Murk: {e:#}");
         std::process::exit(1);
@@ -155,14 +161,23 @@ pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
-            let state = build_state(app)?;
-            let shutdown = Arc::clone(&state.shutdown);
-            app.manage(state);
-
             let window = app
                 .get_webview_window("main")
                 .context("the main window is missing from tauri.conf.json")?;
             window.set_title(privacy::leaks::WINDOW_TITLE)?;
+
+            // Windows only: the video child window must exist before mpv does,
+            // because its handle is the `wid` mpv is initialised with.
+            #[cfg(target_os = "windows")]
+            let win_surface = player::surface_win::WinSurface::new(&window)?;
+            #[cfg(target_os = "windows")]
+            let embed_window = Some(win_surface.hwnd());
+            #[cfg(not(target_os = "windows"))]
+            let embed_window = None;
+
+            let state = build_state(app, embed_window)?;
+            let shutdown = Arc::clone(&state.shutdown);
+            app.manage(state);
 
             #[cfg(target_os = "linux")]
             {
@@ -170,6 +185,17 @@ pub fn run() {
                 let mpv = app.state::<AppState>().player.mpv();
                 let surface = player::surface_gtk::GtkSurface::new(mpv);
                 surface.attach(&window)?;
+            }
+
+            #[cfg(target_os = "windows")]
+            {
+                use player::surface::PlayerSurface;
+                win_surface.attach(&window)?;
+                // Managed rather than leaked: the surface has to outlive setup
+                // because it owns the resize hook, and handing it to Tauri
+                // keeps `detach` reachable for a caller that wants to stop the
+                // video before the window goes away.
+                app.manage(win_surface);
             }
 
             // This thread owns the only `wait_event` call in the process.
