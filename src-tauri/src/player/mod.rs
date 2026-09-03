@@ -192,8 +192,10 @@ impl PlayerHandle {
     pub fn new(profile: HidingProfile, embed_window: Option<i64>) -> Result<Self> {
         force_c_numeric_locale();
 
+        tracing::debug!(?embed_window, options = ?MPV_OPTIONS, video_options = ?MPV_VIDEO_OPTIONS, "initialising mpv");
         let mpv = Mpv::with_initializer(|init| {
             if let Some(wid) = embed_window {
+                tracing::debug!(wid, "setting mpv wid");
                 init.set_option("wid", wid)?;
             }
             for (key, value) in MPV_OPTIONS.iter().chain(MPV_VIDEO_OPTIONS) {
@@ -203,8 +205,13 @@ impl PlayerHandle {
                     // switch off, and reports the option as unknown. Refusing to
                     // start over an absent spoiler source would be backwards.
                     Err(MpvError::Raw(mpv_error::OptionNotFound))
-                        if OPTIONAL_MPV_OPTIONS.contains(key) => {}
-                    Err(e) => return Err(e),
+                        if OPTIONAL_MPV_OPTIONS.contains(key) => {
+                        tracing::debug!(%key, "optional mpv option not supported by this build");
+                    }
+                    Err(e) => {
+                        tracing::error!(%key, %value, "setting mpv option failed: {e}");
+                        return Err(e);
+                    }
                 }
             }
             Ok(())
@@ -217,6 +224,13 @@ impl PlayerHandle {
         )?;
 
         let mpv: &'static Mpv = Box::leak(Box::new(mpv));
+
+        tracing::info!(
+            vo = ?mpv.get_property::<String>("vo"),
+            hwdec = ?mpv.get_property::<String>("hwdec"),
+            gpu_api = ?mpv.get_property::<String>("gpu-api"),
+            "mpv initialised"
+        );
 
         let volume = mpv.get_property::<f64>("volume").unwrap_or(100.0);
         let state = PlaybackState {
@@ -287,6 +301,10 @@ impl PlayerHandle {
     pub fn load_file(&self, path: &Path, start_ms: i64) -> Result<()> {
         let path = path.to_str().context("path is not valid UTF-8")?;
 
+        // The path is logged: this is a local, opt-in debug log (see `fail`
+        // above), not something that reaches the frontend or a report.
+        tracing::debug!(path, start_ms, "loading file into mpv");
+
         // `start` is read when the next file begins. Setting it here and
         // clearing it afterwards keeps absolute positioning entirely inside
         // Rust.
@@ -300,7 +318,13 @@ impl PlayerHandle {
 
         // `mpv_command` takes an argument vector, so the path goes through
         // unquoted and unescaped: no string mangling for spaces or quotes.
-        self.mpv.command("loadfile", &[path, "replace"])?;
+        match self.mpv.command("loadfile", &[path, "replace"]) {
+            Ok(()) => tracing::debug!("loadfile command accepted"),
+            Err(e) => {
+                tracing::error!("loadfile command failed: {e}");
+                return Err(e.into());
+            }
+        }
         Ok(())
     }
 

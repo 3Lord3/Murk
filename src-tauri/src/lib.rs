@@ -52,7 +52,7 @@ fn init_tracing() {
     use tracing_subscriber::EnvFilter;
     // Paths are logged at `trace` only, which is off unless someone asks for
     // it: a debug log printing filenames would undo the point of the program.
-    let filter = EnvFilter::try_from_env("MURK_LOG").unwrap_or_else(|_| EnvFilter::new("info"));
+    let filter = EnvFilter::try_from_env("MURK_LOG").unwrap_or_else(|_| EnvFilter::new("debug"));
     let _ = tracing_subscriber::fmt()
         .with_env_filter(filter)
         .with_target(false)
@@ -126,7 +126,9 @@ fn build_state(app: &tauri::App, embed_window: Option<i64>) -> Result<AppState> 
         .unwrap_or_default();
     tracing::info!("hiding profile: {}", profile.id);
 
+    tracing::debug!(?embed_window, "creating mpv player");
     let player = PlayerHandle::new(profile, embed_window)?;
+    tracing::info!("mpv player created");
 
     Ok(AppState {
         player,
@@ -145,6 +147,7 @@ pub fn run() {
     set_wm_identity();
 
     init_tracing();
+    tracing::info!("murk starting");
     // Before the GTK main loop exists, so no message can slip past the filter.
     #[cfg(target_os = "linux")]
     silence_benign_glib_critical();
@@ -175,6 +178,7 @@ pub fn run() {
             #[cfg(not(target_os = "windows"))]
             let embed_window = None;
 
+            tracing::info!(?embed_window, "main window ready, building player state");
             let state = build_state(app, embed_window)?;
             let shutdown = Arc::clone(&state.shutdown);
             app.manage(state);
@@ -190,6 +194,7 @@ pub fn run() {
             #[cfg(target_os = "windows")]
             {
                 use player::surface::PlayerSurface;
+                tracing::debug!("attaching win32 video surface");
                 win_surface.attach(&window)?;
                 // Managed rather than leaked: the surface has to outlive setup
                 // because it owns the resize hook, and handing it to Tauri
@@ -204,6 +209,7 @@ pub fn run() {
                 .name("murk-mpv-events".into())
                 .spawn(move || player::events::run(handle, shutdown))?;
 
+            tracing::info!("setup complete");
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

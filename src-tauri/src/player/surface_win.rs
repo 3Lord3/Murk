@@ -119,6 +119,8 @@ impl WinSurface {
         let video = WindowHandle(video.0 as isize);
         stack_below_webview(video);
 
+        tracing::debug!(width, height, hwnd = video.0, "video child window created");
+
         Ok(Self {
             video,
             parent,
@@ -145,6 +147,7 @@ impl PlayerSurface for WinSurface {
             tauri::WindowEvent::Resized(_) | tauri::WindowEvent::ScaleFactorChanged { .. } => {
                 let handle = live.load(Ordering::SeqCst);
                 if handle != 0 {
+                    tracing::debug!("resizing video window to fit parent");
                     fit_to_parent(WindowHandle(handle), parent);
                 }
             }
@@ -152,7 +155,10 @@ impl PlayerSurface for WinSurface {
             // handle must stop using it. This is the same guard `detach` sets,
             // reached from the event side: whichever happens first wins and the
             // other is a no-op.
-            tauri::WindowEvent::Destroyed => live.store(0, Ordering::SeqCst),
+            tauri::WindowEvent::Destroyed => {
+                tracing::debug!("parent window destroyed, releasing video handle");
+                live.store(0, Ordering::SeqCst);
+            }
             _ => {}
         });
         Ok(())
@@ -169,6 +175,7 @@ impl PlayerSurface for WinSurface {
         // handle first is what stops a late resize event from touching it; the
         // `Destroyed` branch above does the same thing when shutdown comes from
         // the window rather than from a caller.
+        tracing::debug!("detaching video window");
         self.live.store(0, Ordering::SeqCst);
     }
 }

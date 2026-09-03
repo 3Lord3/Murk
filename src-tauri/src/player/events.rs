@@ -142,6 +142,7 @@ pub fn run(app: AppHandle, shutdown: Arc<AtomicBool>) {
         tracing::error!("could not observe mpv properties: {e}");
         return;
     }
+    tracing::info!("mpv event loop started");
 
     let mut last_emit = Instant::now() - EMIT_INTERVAL;
     let mut last_progress = Instant::now();
@@ -225,6 +226,7 @@ pub fn run(app: AppHandle, shutdown: Arc<AtomicBool>) {
                 }
             }
             Event::StartFile => {
+                tracing::debug!("mpv: start file");
                 state.player.reset_credit();
                 let mut st = state.player.state_mut();
                 st.idle = false;
@@ -233,6 +235,13 @@ pub fn run(app: AppHandle, shutdown: Arc<AtomicBool>) {
                 force_emit = true;
             }
             Event::FileLoaded => {
+                tracing::debug!(
+                    dwidth = ?mpv.get_property::<i64>("dwidth"),
+                    dheight = ?mpv.get_property::<i64>("dheight"),
+                    hwdec_current = ?mpv.get_property::<String>("hwdec-current"),
+                    vo_configured = ?mpv.get_property::<bool>("vo-configured"),
+                    "mpv: file loaded"
+                );
                 // Record the running time so `can_finish_within` has an
                 // answer even before playback produces a position.
                 if let (Some(current), Ok(duration)) =
@@ -258,11 +267,15 @@ pub fn run(app: AppHandle, shutdown: Arc<AtomicBool>) {
                 force_emit = true;
             }
             Event::EndFile(_) => {
+                tracing::debug!("mpv: end file");
                 let mut st = state.player.state_mut();
                 st.idle = true;
                 force_emit = true;
             }
-            Event::Shutdown => break,
+            Event::Shutdown => {
+                tracing::info!("mpv: shutdown event");
+                break;
+            }
             _ => {}
         }
 
