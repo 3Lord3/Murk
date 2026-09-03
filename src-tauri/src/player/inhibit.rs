@@ -14,7 +14,7 @@
 //! `SetThreadExecutionState` is its answer.
 
 use std::sync::atomic::{AtomicU32, Ordering};
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 
 /// The inhibit cookie, or 0 for "not inhibiting".
 static COOKIE: AtomicU32 = AtomicU32::new(0);
