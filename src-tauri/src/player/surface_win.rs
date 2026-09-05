@@ -41,7 +41,7 @@ use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, GetClientRect, RegisterClassW, SetWindowPos, CS_HREDRAW,
     CS_VREDRAW, HWND_BOTTOM, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, WINDOW_EX_STYLE, WNDCLASSW,
-    WS_CHILD, WS_CLIPSIBLINGS, WS_DISABLED, WS_VISIBLE,
+    WS_CHILD, WS_DISABLED, WS_VISIBLE,
 };
 
 use crate::player::surface::PlayerSurface;
@@ -94,16 +94,16 @@ impl WinSurface {
         let instance = unsafe { GetModuleHandleW(None) }.context("GetModuleHandleW failed")?;
         let (width, height) = client_size(parent);
 
-        // WS_CLIPSIBLINGS keeps the child from painting over the webview that
-        // is stacked above it; without it a video frame can flash on top of the
-        // interface during a resize.
+        // No WS_CLIPSIBLINGS: it clips a sibling's drawing to the area of the
+        // window above it, which would crop mpv's frame to the WebView2 region
+        // and leave the video transparent where the interface does not cover it.
         let video = unsafe {
             CreateWindowExW(
                 WINDOW_EX_STYLE(0),
                 CLASS_NAME,
                 // No title: nothing here should ever be able to name a file.
                 w!(""),
-                WS_CHILD | WS_VISIBLE | WS_DISABLED | WS_CLIPSIBLINGS,
+                WS_CHILD | WS_VISIBLE | WS_DISABLED,
                 0,
                 0,
                 width,
