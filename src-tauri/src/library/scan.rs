@@ -29,18 +29,22 @@ fn is_video(path: &Path) -> bool {
 
 /// Sample files, extras and trailers are not episodes and would corrupt the
 /// ordering if treated as such.
+///
+/// Each marker must be a whole word: `sample.mkv` and `Show.Sample.mkv` are
+/// extras, but `sample-20s.mp4` is a clip named with a hyphen and must play.
+/// Dots, underscores and whitespace delimit words; a hyphen does not.
 fn is_extra(stem: &str) -> bool {
-    let s = stem.to_lowercase();
-    [
-        "sample",
-        "trailer",
-        "extras",
-        "featurette",
-        "behind the scenes",
-        "bonus",
-    ]
-    .iter()
-    .any(|marker| s.contains(marker))
+    let lower = stem.to_lowercase();
+    let tokens: Vec<&str> = lower
+        .split(|c: char| c == '.' || c == '_' || c.is_whitespace())
+        .filter(|t| !t.is_empty())
+        .collect();
+
+    let singles = ["sample", "trailer", "extras", "featurette", "bonus"];
+    if singles.iter().any(|marker| tokens.contains(marker)) {
+        return true;
+    }
+    tokens.windows(3).any(|w| w == ["behind", "the", "scenes"])
 }
 
 pub fn scan_series_folder(root: &Path) -> Vec<ScannedEpisode> {
@@ -134,6 +138,32 @@ mod tests {
                 (Some(2), Some(1)),
             ],
             "sample.mkv and notes.txt must be skipped, episode 10 must sort last"
+        );
+
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn standalone_samples_are_extras_but_hyphenated_clips_are_episodes() {
+        let root = tempdir();
+        for name in [
+            "sample.mkv",
+            "Show.Sample.mkv",
+            "sample-20s.mp4",
+            "Episode 1.mkv",
+        ] {
+            fs::write(root.join(name), b"").unwrap();
+        }
+
+        let found = scan_series_folder(&root);
+        let names: Vec<String> = found
+            .iter()
+            .map(|e| e.path.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(
+            names,
+            vec!["Episode 1.mkv".to_string(), "sample-20s.mp4".to_string()],
+            "standalone samples are dropped, a hyphenated clip is kept as an episode"
         );
 
         fs::remove_dir_all(&root).ok();
