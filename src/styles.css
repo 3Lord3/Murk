@@ -158,6 +158,25 @@ button:disabled * {
   background: #2b3444;
 }
 
+/* WebView2 and WebKitGTK draw a native scrollbar unless told otherwise; this
+   gives the library lists a quiet thumb that matches the veil tokens instead. */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--c-veil);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--c-veil-strong);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
