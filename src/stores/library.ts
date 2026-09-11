@@ -23,7 +23,7 @@ export const useLibraryStore = defineStore("library", () => {
   const loading = ref(false);
   /** The failure *code* from the last command, never a ready-made sentence. */
   const error = ref<string | null>(null);
-  /** A non-fatal heads-up in user-facing words (a folder with more series than the cap allows). */
+  /** A non-fatal heads-up in user-facing words. */
   const notice = ref<string | null>(null);
 
   async function refresh() {
@@ -40,10 +40,7 @@ export const useLibraryStore = defineStore("library", () => {
   }
 
   async function add(path: string) {
-    // Refresh even if the command failed partway: a container folder can have
-    // added some series before one of them errored, and the grid should show
-    // what actually landed. Returns the outcome so the caller can tell the
-    // user when the per-folder cap left series out.
+    // Refresh even on failure so a partial add still shows.
     try {
       return await invoke<{ added: number; skipped: number }>("add_series", { path });
     } finally {

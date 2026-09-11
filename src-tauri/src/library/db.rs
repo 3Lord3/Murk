@@ -51,9 +51,8 @@ fn now_secs() -> i64 {
         .unwrap_or(0)
 }
 
-/// Progress timestamps in milliseconds. Ordering two just-saved episodes is
-/// the whole job of this value, and one-second resolution made a quick switch
-/// between two unfinished episodes a coin toss.
+/// Millisecond timestamps: a quick switch between two just-saved episodes
+/// must not be a coin toss.
 fn now_millis() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -63,13 +62,9 @@ fn now_millis() -> i64 {
 
 pub struct Library {
     conn: parking_lot::Mutex<Connection>,
-    /// The in-memory copy of each series' sidecar, so playback progress and the
-    /// library screen do not re-read the file every few seconds. Every save
-    /// writes through to the file, so the two cannot drift.
+    /// Cached sidecar per series; every save writes through to the file.
     sidecars: parking_lot::Mutex<HashMap<i64, Sidecar>>,
-    /// The sidecar key of each episode (series -> episode id -> key), so a
-    /// progress tick does not re-read the whole series' episode list to key one
-    /// write. Cleared whenever a series' episodes change.
+    /// Cached sidecar key per episode; cleared when a series' episodes change.
     keys: parking_lot::Mutex<HashMap<i64, HashMap<i64, String>>>,
 }
 
@@ -123,27 +118,16 @@ impl Library {
             sidecars: parking_lot::Mutex::new(HashMap::new()),
             keys: parking_lot::Mutex::new(HashMap::new()),
         };
-        // Migration touches the user's folders, which may be read-only or gone.
-        // A failure must not make the app unlaunchable: log it, and the legacy
-        // rows stay put for the next attempt.
+        // A migration failure must never make the app unlaunchable; try later.
         if let Err(e) = library.migrate_legacy_progress() {
             tracing::warn!("legacy progress migration did not finish: {e}");
         }
         Ok(library)
     }
 
-    /// One-time lift of progress and per-series settings out of the old
-    /// database into each series' sidecar file.
-    ///
-    /// Versions of Murk before the sidecar kept progress in a `progress` table
-    /// (keyed by episode id) and the subtitle choice in `setting`. Both belong
-    /// in the series folder now, so they are exported there and the legacy rows
-    /// are dropped.
-    ///
-    /// The cleanup is per series, and the table is dropped only once it is
-    /// empty. A series whose folder is unavailable (an unmounted drive, a
-    /// sleeping share) is skipped and its rows are left untouched, so it is
-    /// migrated on a later start instead of being thrown away.
+    /// One-time lift of old `progress`/`setting` rows into each series' sidecar.
+    /// The `progress` table is dropped only once empty; a series whose folder is
+    /// unavailable keeps its rows for a later start.
     fn migrate_legacy_progress(&self) -> Result<()> {
         let has_progress = self.conn.lock().query_row(
             "SELECT EXISTS (
@@ -157,8 +141,7 @@ impl Library {
         }
 
         for series in self.list_series()? {
-            // No folder, no sidecar: whatever the old table holds for it stays
-            // until the folder is reachable again.
+            // No folder, no sidecar; its rows stay for a later start.
             if !series.root_path.is_dir() {
                 continue;
             }
@@ -186,8 +169,7 @@ impl Library {
             };
 
             let mut sidecar = Sidecar::load(&series.root_path);
-            // A sidecar that already names a language is newer than the legacy
-            // setting, so it wins.
+            // An existing sidecar language wins over the legacy setting.
             if sidecar.subtitle_lang.is_none() {
                 if let Ok(Some(lang)) = self.get_setting(&format!("subtitle_lang:{}", series.id)) {
                     sidecar.subtitle_lang = Some(lang);
@@ -215,8 +197,7 @@ impl Library {
                 sidecar.save(&series.root_path)?;
             }
 
-            // Only this series' legacy rows are dropped, and only after the
-            // sidecar was written. A failed save leaves them for next time.
+            // Drop this series' rows only after the sidecar was saved.
             self.conn.lock().execute(
                 "DELETE FROM progress WHERE episode_id IN
                    (SELECT id FROM episode WHERE series_id = ?1)",
@@ -228,8 +209,7 @@ impl Library {
             )?;
         }
 
-        // Drop the table only when every series was migrated. If any folder was
-        // missing, the rows above are still there and must not be discarded.
+        // Drop the table only once every series was migrated.
         let remaining: i64 =
             self.conn
                 .lock()
@@ -308,23 +288,15 @@ impl Library {
         let conn = self.conn.lock();
         conn.execute("DELETE FROM series WHERE id = ?1", params![series_id])?;
         drop(conn);
-        // The sidecar is the user's own file, in the user's folder; it is left
-        // in place so that re-adding the same folder brings the progress back.
+        // The sidecar stays with the folder, so re-adding brings progress back.
         self.sidecars.lock().remove(&series_id);
         self.keys.lock().remove(&series_id);
         Ok(())
     }
 
-    /// Delete series whose folders are not reachable right now (an unmounted
-    /// drive, a sleeping share). Their progress lives in the series' own sidecar
-    /// file, which went with the folder, so removing the row loses nothing: the
-    /// user can re-add the folder and the progress comes back.
-    ///
-    /// A series that still holds un-migrated legacy progress in the database is
-    /// *kept*, because there is no sidecar yet for its data to live in — the
-    /// folder isn't there. It is pruned on a later start once the folder is
-    /// reachable and the rows have moved into the sidecar. Returns how many
-    /// series were dropped.
+    /// Delete series whose folders are unreachable; their progress lives in the
+    /// folder's sidecar and returns on a re-add. Series still holding legacy
+    /// progress are kept, since dropping them would throw that data away.
     pub fn prune_missing_series(&self) -> Result<u32> {
         let mut pruned = 0u32;
         for series in self.list_series()? {
@@ -340,9 +312,8 @@ impl Library {
         Ok(pruned)
     }
 
-    /// Whether a series still has rows in the legacy `progress` table — i.e.
-    /// progress the sidecar migration could not lift because the folder was
-    /// unavailable. Deleting such a series would throw that data away.
+    /// Whether the series still has legacy `progress` rows that must not be
+    /// deleted (migration was blocked by an unavailable folder).
     fn has_legacy_progress(&self, series_id: i64) -> Result<bool> {
         let conn = self.conn.lock();
         let has_table: bool = conn.query_row(
@@ -367,9 +338,7 @@ impl Library {
 
     // --- episodes ----------------------------------------------------------
 
-    /// Insert what the scanner found, leaving existing rows (and their progress)
-    /// alone. Files that disappeared are dropped, so a renamed folder does not
-    /// leave the "continue" cursor pointing at nothing.
+    /// Insert what the scanner found; drop episodes that disappeared.
     pub fn sync_episodes(&self, series_id: i64, found: &[ScannedEpisode]) -> Result<()> {
         {
             let mut conn = self.conn.lock();
@@ -415,13 +384,11 @@ impl Library {
             }
             tx.commit()?;
         }
-        // Episode set changed: any cached episode keys for this series are stale.
+        // Cached episode keys are stale now.
         self.keys.lock().remove(&series_id);
 
-        // Folders may hold stale progress for files that are gone. Pruning it
-        // keeps `has_progress` honest and the file from growing forever. This
-        // runs after the transaction so it can take the sidecar lock without
-        // ever holding the database lock at the same time.
+        // Prune sidecar entries for files that are gone, after the transaction
+        // so the sidecar lock is never taken while holding the database lock.
         if let Some(root) = self.series_root(series_id)? {
             if let Err(e) = self.prune_sidecar(series_id, found, &root) {
                 tracing::warn!("could not prune sidecar for series {series_id}: {e}");
@@ -485,10 +452,7 @@ impl Library {
             .optional()?)
     }
 
-    /// Every episode of a series in playback order.
-    ///
-    /// Kept private: the only things that may leave this module are the
-    /// projections in `commands.rs`, never a list of episodes.
+    /// Every episode of a series, in playback order. Never leaves this module.
     fn episodes(&self, series_id: i64) -> Result<Vec<EpisodeRow>> {
         let conn = self.conn.lock();
         let mut stmt = conn.prepare(
@@ -501,14 +465,8 @@ impl Library {
         Ok(rows)
     }
 
-    /// Where "Continue" should take the user.
-    ///
-    /// Deliberately returns one episode and nothing else. There is no query in
-    /// this file that hands the frontend a list of episodes with their numbers,
-    /// because there is no screen that is allowed to show one.
-    ///
-    /// The "unfinished / untouched" facts come from the sidecar, keyed by
-    /// season and episode number, so they survive a folder being moved.
+    /// Where "Continue" should take the user: the most recently left-unfinished
+    /// episode, else the first untouched one. Facts come from the sidecar.
     pub fn resume_target(&self, series_id: i64) -> Result<Option<EpisodeRow>> {
         let root = self
             .series_root(series_id)?
@@ -537,9 +495,7 @@ impl Library {
             return Ok(Some(episode));
         }
 
-        // 2. otherwise the first episode with no progress at all. Every entry
-        // present here is watched (step 1 found nothing unfinished), so "not
-        // watched" and "no entry" pick the same episode.
+        // 2. otherwise the first episode with no progress at all.
         for episode in episodes {
             let Some(key) = keys.get(&episode.id) else {
                 continue;
@@ -573,10 +529,6 @@ impl Library {
     }
 
     /// The sidecar for a series, loaded once and cached.
-    ///
-    /// Reads go through the cache; writes go through [`Self::update_sidecar`],
-    /// which holds the same lock across load, change and save. Anything that
-    /// touches progress or settings must use that method too.
     fn cached_sidecar(&self, series_id: i64) -> Result<Sidecar> {
         if let Some(sidecar) = self.sidecars.lock().get(&series_id) {
             return Ok(sidecar.clone());
@@ -589,13 +541,8 @@ impl Library {
         Ok(sidecar)
     }
 
-    /// Change a series' sidecar under a single lock.
-    ///
-    /// The whole load-change-save runs while the map is locked, so a progress
-    /// tick on the mpv thread and a subtitle change on a command thread cannot
-    /// read the same snapshot and have the later write drop the other's edit.
-    /// A result with nothing left in it removes the file rather than leaving a
-    /// husk behind.
+    /// Load, change and save a series' sidecar under one lock. An empty result
+    /// removes the file.
     fn update_sidecar<F>(&self, series_id: i64, change: F) -> Result<()>
     where
         F: FnOnce(&mut Sidecar),
@@ -621,13 +568,7 @@ impl Library {
         Ok(())
     }
 
-    /// The sidecar key of one episode, matching the keys [`episode_keys`]
-    /// assigns to the rest of its series.
-    ///
-    /// Episode keys are stable per series, so they are cached; only a rescan
-    /// (which changes the episode list) invalidates them. This is the hot path
-    /// a progress tick walks every few seconds, so it must not re-read the whole
-    /// series' episode list every time.
+    /// The sidecar key of one episode, cached; invalidated when episodes change.
     fn key_for(&self, series_id: i64, root: &Path, episode: &EpisodeRow) -> Result<String> {
         {
             let cache = self.keys.lock();
@@ -637,9 +578,7 @@ impl Library {
                 }
             }
         }
-        // Cache miss: the series' keys were never computed (or a rescan cleared
-        // them). Build the map once and keep it. The lock is not held while the
-        // episode list is read, so no db/keys ordering is implied.
+        // Cache miss: build the series' key map once and keep it.
         let episodes = self.episodes(series_id)?;
         let keys = episode_keys(&episodes, root);
         let key = keys.get(&episode.id).cloned().unwrap_or_else(|| {
@@ -661,8 +600,7 @@ impl Library {
             .ok_or_else(|| anyhow!("no such series: {series_id}"))?;
         let key = self.key_for(series_id, &root, episode)?;
         self.update_sidecar(series_id, move |sidecar| {
-            // Once watched, always watched: a stray seek to the start must not
-            // resurrect an episode the user has finished.
+            // Once watched, always watched.
             let watched = match sidecar.progress_for(&key) {
                 Some(previous) => previous.watched || watched,
                 None => watched,
@@ -684,34 +622,21 @@ impl Library {
             .ok_or_else(|| anyhow!("no such series: {series_id}"))?;
         let sidecar = self.cached_sidecar(series_id)?;
         let key = self.key_for(series_id, &root, episode)?;
-        // A finished episode restarts from the beginning rather than from its
-        // last second, which would otherwise show the credits and no more.
+        // A finished episode restarts from the beginning.
         Ok(match sidecar.progress_for(&key) {
             Some(entry) if !entry.watched => entry.position_ms,
             _ => 0,
         })
     }
 
-    /// Whether the series has anything to forget: a stored position or a
-    /// watched flag on any of its episodes. Unlike a resume position this stays
-    /// true for a series watched to the end.
+    /// Whether any episode has a stored position or watched flag.
     pub fn has_progress(&self, series_id: i64) -> Result<bool> {
         Ok(!self.cached_sidecar(series_id)?.progress.is_empty())
     }
 
-    /// How far the whole work has been watched, from 0 to 1.
-    ///
-    /// The unit is the folder, not the file: a series is its episodes end to
-    /// end, and a film is its single file. Time is what counts, so a
-    /// twenty-minute episode does not weigh the same as an hour-long one.
-    ///
-    /// Running times are only learned when a file is opened, so unplayed
-    /// episodes have none. Pretending they are not there would make the bar
-    /// leap backwards as the library fills in, so each unknown one is
-    /// estimated at the average of the running times already known in the same
-    /// series. With nothing known at all, the episode count is the fallback.
-    ///
-    /// Returns `None` for a series with no episodes.
+    /// How far the whole folder has been watched, 0 to 1, weighted by running
+    /// time. Unknown durations use the series average; unknown to all, the
+    /// episode count. Returns `None` for a series with no episodes.
     pub fn series_progress(&self, series_id: i64) -> Result<Option<f64>> {
         let root = match self.series_root(series_id)? {
             Some(root) => root,
@@ -753,8 +678,7 @@ impl Library {
         for (duration, position, watched) in rows {
             let duration = duration.filter(|d| *d > 0).unwrap_or(average) as f64;
             total += duration;
-            // A watched episode counts whole however far into it the last
-            // stored position happened to be.
+            // A watched episode counts in full.
             done += if watched {
                 duration
             } else {
@@ -769,8 +693,7 @@ impl Library {
         }))
     }
 
-    /// Forget every position and watched flag in a series, so it plays again
-    /// from the very beginning.
+    /// Forget every saved position and watched flag in a series.
     pub fn reset_progress(&self, series_id: i64) -> Result<()> {
         self.update_sidecar(series_id, |sidecar| sidecar.progress.clear())
     }
@@ -808,9 +731,7 @@ impl Library {
 
     // --- per-series subtitle preference (the sidecar file) -----------------
 
-    /// The language code of the subtitle track the user last chose for this
-    /// series, so the next episode can re-select it. Track ids in mpv are
-    /// per-file, so a language is the stable identity that survives the switch.
+    /// The subtitle language last chosen for this series.
     pub fn preferred_subtitle_lang(&self, series_id: i64) -> Result<Option<String>> {
         Ok(self.cached_sidecar(series_id)?.subtitle_lang.clone())
     }
@@ -823,12 +744,9 @@ impl Library {
     }
 }
 
-/// Assign a sidecar key to each `(season, number, path)` in order.
-///
-/// Episodes that share a season and number (duplicate rips, a special the
-/// parser mis-numbered) would otherwise clobber one another's progress, so
-/// within each such group the path relative to the series folder is used
-/// instead. The fallback survives a whole-folder move.
+/// One sidecar key per `(season, number, path)`; episodes that share a season
+/// and number fall back to the path relative to the folder, so they don't
+/// clobber each other.
 fn unique_keys<'a>(
     root: &Path,
     items: impl Iterator<Item = (Option<u32>, Option<u32>, &'a Path)>,
@@ -911,7 +829,6 @@ mod tests {
         (lib, sid)
     }
 
-    /// The episodes of a series as rows, for the progress calls that need one.
     fn seeded_episodes(lib: &Library, sid: i64) -> Vec<EpisodeRow> {
         lib.episodes(sid).unwrap()
     }
@@ -1075,8 +992,7 @@ mod tests {
         // The sidecar file now exists in the folder.
         assert!(dir.join(sidecar::SIDECAR_FILE).is_file());
 
-        // Removing the series leaves that file alone, and re-adding the same
-        // folder brings the progress and the subtitle choice back.
+        // Removing the series leaves the file; re-adding the folder restores it.
         lib.remove_series(sid).unwrap();
         let again = lib.add_series(&dir, "Show").unwrap();
         lib.sync_episodes(again, &eps).unwrap();
@@ -1109,8 +1025,7 @@ mod tests {
         let rows = lib.episodes(sid).unwrap();
         assert_eq!(rows.len(), 2);
 
-        // The two files claim the same S01E01. Progress on one must not bleed
-        // into the other.
+        // Two files share S01E01; progress must not bleed between them.
         lib.save_progress(sid, &rows[0], 60_000, false).unwrap();
         assert_eq!(lib.resume_position_ms(sid, &rows[0]).unwrap(), 60_000);
         assert_eq!(lib.resume_position_ms(sid, &rows[1]).unwrap(), 0);
@@ -1159,8 +1074,7 @@ mod tests {
         assert!(lib.has_progress(sid).unwrap());
         assert!(dir.join(sidecar::SIDECAR_FILE).is_file());
 
-        // The drive is unmounted: the folder is not at its path, but its
-        // contents — including the sidecar — exist elsewhere and will come back.
+        // Simulate an unmounted drive by moving the folder away.
         let away = dir.with_file_name(format!(
             "{}_away",
             dir.file_name().unwrap().to_string_lossy()
@@ -1169,7 +1083,7 @@ mod tests {
         assert_eq!(lib.prune_missing_series().unwrap(), 1);
         assert!(lib.series(sid).unwrap().is_none());
 
-        // The folder returns; re-adding it brings the position back too.
+        // Re-adding the moved-back folder restores the position.
         std::fs::rename(&away, &dir).unwrap();
         let again = lib.add_series(&dir, "Show").unwrap();
         lib.sync_episodes(again, &eps).unwrap();
@@ -1182,9 +1096,7 @@ mod tests {
 
     #[test]
     fn prune_keeps_a_series_whose_progress_is_still_legacy() {
-        // A pre-sidecar series with an unreachable folder holds its progress in
-        // the database, not in a sidecar; dropping the row would throw that
-        // away, so the prune leaves it for a start when the folder is there.
+        // A missing-folder series still on legacy progress is kept.
         let conn = rusqlite::Connection::open_in_memory().unwrap();
         conn.execute_batch(
             r#"
@@ -1237,16 +1149,14 @@ mod tests {
             sidecars: parking_lot::Mutex::new(HashMap::new()),
             keys: parking_lot::Mutex::new(HashMap::new()),
         };
-        // A series whose folder is missing but that still holds legacy progress
-        // is kept, and the legacy row is still there.
+        // A missing-folder series with legacy progress is kept.
         assert_eq!(lib.prune_missing_series().unwrap(), 0);
         assert!(lib.series(sid).unwrap().is_some());
     }
 
     #[test]
     fn migration_leaves_rows_for_a_folder_that_is_not_there() {
-        // A pre-sidecar database whose only series points at a missing folder,
-        // as happens when an external drive is not mounted at first start.
+        // A pre-sidecar DB whose only series points at a missing folder.
         let conn = rusqlite::Connection::open_in_memory().unwrap();
         conn.execute_batch(
             r#"
@@ -1304,8 +1214,7 @@ mod tests {
         };
         lib.migrate_legacy_progress().unwrap();
 
-        // The row survives, because there was nowhere to put it. A later start,
-        // with the drive mounted, migrates it then.
+        // The row survives, for when the drive returns.
         let remaining: i64 = lib
             .conn
             .lock()

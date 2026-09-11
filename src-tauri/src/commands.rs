@@ -189,11 +189,8 @@ pub struct SeriesCard {
 
 #[tauri::command]
 pub fn list_series(state: State<'_, AppState>) -> CommandResult<Vec<SeriesCard>> {
-    // A series whose folder is not reachable right now (an unmounted drive, a
-    // sleeping share) is dropped rather than hidden: its progress lives in the
-    // sidecar file that went with the folder, so losing the row loses nothing,
-    // and re-adding the folder brings it back. A series still holding
-    // un-migrated legacy progress is kept (see [`Library::prune_missing_series`]).
+    // Drop rows whose folders are gone (the sidecar keeps their progress);
+    // keep any still holding un-migrated legacy progress.
     if let Err(e) = state.library.prune_missing_series() {
         tracing::warn!("could not prune missing series: {e}");
     }
@@ -207,8 +204,6 @@ pub fn list_series(state: State<'_, AppState>) -> CommandResult<Vec<SeriesCard>>
         .into_iter()
         .map(|s| {
             let has_progress = state.library.has_progress(s.id).unwrap_or(false);
-            // "Continue" is about the series, not a half-watched file:
-            // anything remembered plus anything left to play.
             let in_progress =
                 has_progress && state.library.resume_target(s.id).ok().flatten().is_some();
             let progress = show_progress
@@ -262,24 +257,15 @@ fn discover_poster(state: &AppState, series_id: i64) {
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AddSeriesCount {
-    /// How many series were added from the folder.
+    /// Series added from the folder.
     added: u32,
-    /// Series the folder held but which were *not* added, because the folder
-    /// held more than [`scan::MAX_SERIES_TO_ADD`]. The frontend tells the user
-    /// instead of letting the cap bite silently.
+    /// Series left out by the per-folder cap.
     skipped: u32,
 }
 
-/// Add a series by **folder**.
-///
-/// The file chooser is only ever opened at folder level: its list view prints
-/// filenames, and `S02E08 - Endings and Beginnings.mkv` is a spoiler the user
-/// cannot unsee. The folder name they navigate to, they have already read.
-///
-/// A folder holding whole series (one subfolder per show) is added as all of
-/// them; a plain series folder — episodes directly or in `Season N` subfolders
-/// — is added as the one series it is. Reports how many were added and how many
-/// were left out by the per-folder cap.
+/// Add a series by **folder**. A folder of whole shows adds all of them; a
+/// plain series folder adds the one series it holds. Reports how many were
+/// added and how many the per-folder cap left out.
 #[tauri::command]
 pub fn add_series(state: State<'_, AppState>, path: PathBuf) -> CommandResult<AddSeriesCount> {
     if !path.is_dir() {
@@ -301,8 +287,6 @@ pub fn add_series(state: State<'_, AppState>, path: PathBuf) -> CommandResult<Ad
         discover_poster(&state, id);
         added += 1;
     }
-    // The cap is not silent: anything left out is reported so the user knows
-    // the grid is not showing the whole folder.
     Ok(AddSeriesCount {
         added,
         skipped: (roots.len() as u32).saturating_sub(added),
@@ -319,9 +303,7 @@ pub fn rescan_series(state: State<'_, AppState>, series_id: i64) -> CommandResul
 /// were scanned.
 #[tauri::command]
 pub fn rescan_all_series(state: State<'_, AppState>) -> CommandResult<u32> {
-    // Drop series whose folders are gone first, so the loop below does not
-    // report every missing folder as a failure. Their progress is in the
-    // folders' sidecars and comes back on a re-add.
+    // Prune first so missing folders don't fall through as rescan failures.
     if let Err(e) = state.library.prune_missing_series() {
         tracing::warn!("could not prune missing series: {e}");
     }
@@ -331,8 +313,7 @@ pub fn rescan_all_series(state: State<'_, AppState>) -> CommandResult<u32> {
         .map_err(fail("library_read_failed"))?;
     let mut scanned = 0u32;
     for s in series {
-        // A folder that vanished between the prune and here is skipped, not
-        // treated as "the series is empty": `rescan_one` reports it for the log.
+        // A folder gone since the prune logs a failure instead of wiping it.
         match rescan_one(&state, s.id) {
             Ok(()) => scanned += 1,
             Err(e) => tracing::warn!("rescan of series {} failed: {e}", s.id),
@@ -349,9 +330,7 @@ fn rescan_one(state: &AppState, series_id: i64) -> CommandResult<()> {
         .series(series_id)
         .map_err(fail("library_read_failed"))?
         .ok_or_else(|| "no_such_series".to_string())?;
-    // A rescan of a folder that is not there would find nothing and wipe the
-    // episode list. Missing series are pruned by `list_series` anyway; this
-    // guard makes the failure explicit if one slips through.
+    // Guard against wiping the episode list for a folder that is missing.
     if !series.root_path.is_dir() {
         return Err("series_folder_missing".into());
     }

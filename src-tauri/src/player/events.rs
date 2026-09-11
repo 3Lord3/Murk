@@ -325,8 +325,7 @@ pub fn save_progress(app: &AppHandle, finished: bool) {
     // is recorded as zero rather than guessed at.
     let position_ms = position_ms.unwrap_or(0);
 
-    // Resolve the episode so progress can be filed under its stable key
-    // (season/number, or the path relative to the folder).
+    // Resolve the episode so progress can be filed under its stable key.
     let Some(episode) = state.library.episode(current.episode_id).ok().flatten() else {
         return;
     };

@@ -68,10 +68,6 @@ fn cap(re: &Regex, hay: &str, idx: usize) -> Option<u32> {
 }
 
 /// Whether a directory name names a season ("Season 3", "S02", "Сезон 1").
-///
-/// The scanner uses this to tell a series folder, which keeps its episodes in
-/// season subfolders, from a container that holds whole series — the two would
-/// otherwise be added the same way.
 pub fn season_from_directory(name: &str) -> Option<u32> {
     let d = strip_noise(name);
     cap(

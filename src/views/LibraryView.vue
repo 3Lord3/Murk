@@ -44,15 +44,13 @@ async function addFolder() {
   if (typeof picked === "string") {
     await runAction(async () => {
       const { skipped } = await library.add(picked);
-      // The per-folder cap is not silent: if some series were left out, tell the
-      // user the grid is not showing the whole folder.
+      // Tell the user if the per-folder cap left series out.
       if (skipped > 0) library.notice = t("library.folderTooLarge");
     });
   }
 }
 
-// A long add or rescan can take seconds; a second click must not start a
-// parallel one.
+// Prevent a second add/rescan from starting while one is running.
 const busy = ref(false);
 async function runAction(action: () => Promise<void>) {
   if (busy.value) return;

@@ -96,13 +96,10 @@ pub fn display_name_for(root: &Path) -> String {
 
 // --- folders that hold whole series -----------------------------------------
 
-/// How far to descend when deciding whether a folder holds series or is one.
-/// A container of whole series is rarely more than a couple of levels deep;
-/// beyond this the folder is taken as a series rather than walked forever.
+/// Max descent before a folder is treated as a series rather than walked forever.
 pub const MAX_CONTAINER_DEPTH: usize = 4;
 
-/// The most series a single "add folder" may create. Picking a home directory
-/// must not silently index a thousand leaves.
+/// Max series a single "add folder" may create.
 pub const MAX_SERIES_TO_ADD: usize = 500;
 
 /// The immediate subfolders of `root`.
@@ -136,13 +133,9 @@ fn any_season_subfolder(dirs: &[PathBuf]) -> bool {
         .any(|name| parse::season_from_directory(name).is_some())
 }
 
-/// The series roots the user means when they add `root`.
-///
-/// A folder that holds video files directly, or keeps its episodes in `Season
-/// N` subfolders, is itself a series and comes back as the single root. Any
-/// other folder with subfolders is a container of whole series: each subfolder
-/// becomes a series root in its turn, so adding `~/Series` adds every show
-/// inside it instead of one giant series named "Series".
+/// The series roots the user means when they add `root`. A folder holding
+/// videos directly (or in `Season N` subfolders) is itself a series; any other
+/// folder is a container whose subfolders each become a series root.
 pub fn series_roots_to_add(root: &Path) -> Vec<PathBuf> {
     let mut roots = Vec::new();
     collect_series_roots(root, 0, &mut roots);
@@ -152,8 +145,7 @@ pub fn series_roots_to_add(root: &Path) -> Vec<PathBuf> {
 fn collect_series_roots(root: &Path, depth: usize, out: &mut Vec<PathBuf>) {
     let dirs = match subfolders(root) {
         Ok(dirs) => dirs,
-        // An unreadable folder is not evidence that it is a container: treat it
-        // as a single series rather than recursing past ground we cannot see.
+        // An unreadable folder is treated as a single series.
         Err(_) => {
             out.push(root.to_path_buf());
             return;

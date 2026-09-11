@@ -34,10 +34,8 @@ pub struct Entry {
 
 /// Everything Murk keeps about a series, in the series' own folder.
 ///
-/// The file is versioned and the settings object is meant to grow (subtitle
-/// language today, anything else local to the work tomorrow). Unknown fields
-/// are preserved by serde, so a newer Murk's file still loads here and its
-/// settings survive a round-trip through an older one.
+/// Versioned and extensible: unknown fields survive a round-trip through an
+/// older build.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Sidecar {
@@ -50,9 +48,7 @@ pub struct Sidecar {
     /// The subtitle language the user last chose for this series, or "off".
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub subtitle_lang: Option<String>,
-    /// Fields written by a newer Murk that this build does not understand.
-    /// Captured on load and written back on save, so a round-trip through an
-    /// older build does not silently drop them.
+    /// Unknown fields from a newer build, carried across a round-trip.
     #[serde(flatten)]
     pub extra: BTreeMap<String, serde_json::Value>,
 }
@@ -67,9 +63,7 @@ impl Sidecar {
         root.join(SIDECAR_FILE)
     }
 
-    /// Read the sidecar, or start from a clean slate when the file is absent
-    /// or unreadable. A corrupt file must not crash playback: it is logged and
-    /// treated as empty, and the next save overwrites it.
+    /// Read the sidecar, or start empty when the file is absent/unreadable.
     pub fn load(root: &Path) -> Self {
         let path = Self::path(root);
         match fs::read_to_string(&path) {
@@ -87,8 +81,7 @@ impl Sidecar {
                 }
                 Err(e) => {
                     tracing::warn!("could not parse {}: {e}", path.display());
-                    // Set the damaged file aside before the next save overwrites
-                    // it, so whatever can be recovered by hand is not lost.
+                    // Set the damaged file aside before the next save overwrites it.
                     let backup = root.join(format!("{SIDECAR_FILE}.corrupt"));
                     if let Err(e) = fs::rename(&path, &backup) {
                         tracing::warn!("could not set aside corrupt {}: {e}", path.display());
@@ -104,9 +97,7 @@ impl Sidecar {
         }
     }
 
-    /// Write the sidecar, atomically, into the series folder. If the folder is
-    /// gone the write is a no-op: the file went with the folder, and progress
-    /// for a series that has no folder has nowhere to live.
+    /// Write the sidecar atomically; a no-op when the folder is gone.
     pub fn save(&self, root: &Path) -> std::io::Result<()> {
         if !root.is_dir() {
             return Ok(());
@@ -119,10 +110,7 @@ impl Sidecar {
         Ok(())
     }
 
-    /// Whether the file carries anything worth keeping. Used by the migration
-    /// to avoid writing an empty sidecar into folders that had no progress, and
-    /// to decide whether a series still needs a file at all. Unknown fields
-    /// count as data: dropping them would defeat the round-trip guarantee.
+    /// Whether the file carries any data worth keeping.
     pub fn has_data(&self) -> bool {
         !self.progress.is_empty() || self.subtitle_lang.is_some() || !self.extra.is_empty()
     }
@@ -142,11 +130,9 @@ fn serde_to_io(e: serde_json::Error) -> std::io::Error {
 
 /// The stable identity of an episode inside a sidecar.
 ///
-/// Named files (the common case) are keyed by their season and episode
-/// numbers, so progress survives a rename as well as a move. Files the parser
-/// could not number have no such anchor; for those the key is the path relative
-/// to the series folder, which stays put across a whole-folder move even when
-/// the absolute path does not.
+/// Named files are keyed by season/episode (survives rename and move);
+/// unnumbered files by their path relative to the folder (survives a move, not
+/// a rename).
 pub fn episode_key(season: Option<u32>, number: Option<u32>, root: &Path, path: &Path) -> String {
     match (season, number) {
         (Some(s), Some(n)) => format!("{s}/{n}"),
@@ -155,10 +141,6 @@ pub fn episode_key(season: Option<u32>, number: Option<u32>, root: &Path, path: 
 }
 
 /// The path of a file relative to the series folder, forward-slashed.
-///
-/// This is the key for episodes the parser could not number, and the fallback
-/// for episodes whose numbers collide (several files claiming to be the same
-/// season and episode). It survives a whole-folder move, though not a rename.
 pub fn relative_key(root: &Path, path: &Path) -> String {
     path.strip_prefix(root)
         .map(|rel| rel.to_string_lossy().replace('\\', "/"))
@@ -214,7 +196,6 @@ mod tests {
     #[test]
     fn unknown_fields_survive_a_round_trip() {
         let dir = tempdir();
-        // A newer Murk wrote a setting this build does not know about.
         fs::write(
             Sidecar::path(&dir),
             br#"{"version":2,"progress":{},"favorite":true,"customThing":{"a":1}}"#,
@@ -225,15 +206,12 @@ mod tests {
         assert_eq!(loaded.version, 2);
         loaded.save(&dir).unwrap();
 
-        // Serialising and reading back must not drop the newer fields, or an
-        // older build would silently destroy what a newer one wrote.
         let again = Sidecar::load(&dir);
         assert_eq!(again.extra.get("favorite"), Some(&serde_json::json!(true)));
         assert_eq!(
             again.extra.get("customThing"),
             Some(&serde_json::json!({"a": 1}))
         );
-        // And it still counts as data worth keeping.
         assert!(again.has_data());
 
         fs::remove_dir_all(&dir).ok();
