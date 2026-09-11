@@ -444,27 +444,18 @@ pub fn reset_progress(state: State<'_, AppState>, series_id: i64) -> CommandResu
 }
 
 /// Start, or continue, a series.
-///
-/// Which file this is and where it resumes are decided here, in Rust, from the
-/// database. The frontend passes a series id and receives nothing back but
-/// success.
 #[tauri::command]
 pub fn continue_series(
     app: AppHandle,
     state: State<'_, AppState>,
     series_id: i64,
 ) -> CommandResult<()> {
-    // A series watched to the end has no resume target, so it falls back to
-    // the first episode: a rewatch, which is why the card says "Start".
-    // Same predicate the card's label is built from, so the button the user
-    // pressed and the behaviour they get cannot drift apart.
-    let resume = state
+    // A watched-to-the-end series has no resume target and restarts.
+    let episode = match state
         .library
         .resume_target(series_id)
-        .map_err(fail("library_read_failed"))?;
-    let continuing = state.library.has_progress(series_id).unwrap_or(false) && resume.is_some();
-
-    let episode = match resume {
+        .map_err(fail("library_read_failed"))?
+    {
         Some(episode) => episode,
         None => state
             .library
@@ -477,10 +468,7 @@ pub fn continue_series(
         .library
         .resume_position_ms(series_id, &episode)
         .unwrap_or(0);
-    // "Continue" waits, paused, on the frame it will go on from, so the
-    // viewer does not miss the first minute. "Start" and auto-advance play at
-    // once.
-    play_episode(&app, &state, &episode, start_ms, continuing)
+    play_episode(&app, &state, &episode, start_ms)
 }
 
 /// Accept the auto-advance the backend queued at end of file.
@@ -490,7 +478,7 @@ pub fn play_next(app: AppHandle, state: State<'_, AppState>) -> CommandResult<()
     let episode = next_id
         .and_then(|id| state.library.episode(id).ok().flatten())
         .ok_or_else(|| "nothing_next".to_string())?;
-    play_episode(&app, &state, &episode, 0, false)
+    play_episode(&app, &state, &episode, 0)
 }
 
 #[tauri::command]
@@ -503,7 +491,6 @@ fn play_episode(
     state: &State<'_, AppState>,
     episode: &crate::library::EpisodeRow,
     start_ms: i64,
-    paused: bool,
 ) -> CommandResult<()> {
     let count = state.library.episode_count(episode.series_id).unwrap_or(0);
 
@@ -531,9 +518,10 @@ fn play_episode(
         st.path = Some(episode.path.clone());
     }
 
-    // Set before loading: `pause` is global, and setting it after `loadfile`
-    // would let a second of the opening play first.
-    state.player.set_paused(paused).ok();
+    // `pause` is global and survives across files, so force it off before
+    // loading: setting it after `loadfile` would let a second of the opening
+    // play first, and leaving it alone would start on a leftover pause.
+    state.player.set_paused(false).ok();
     state
         .player
         .load_file(&episode.path, start_ms)
