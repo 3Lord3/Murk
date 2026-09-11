@@ -67,6 +67,21 @@ fn cap(re: &Regex, hay: &str, idx: usize) -> Option<u32> {
     re.captures(hay)?.get(idx)?.as_str().parse().ok()
 }
 
+/// Whether a directory name names a season ("Season 3", "S02", "Сезон 1").
+///
+/// The scanner uses this to tell a series folder, which keeps its episodes in
+/// season subfolders, from a container that holds whole series — the two would
+/// otherwise be added the same way.
+pub fn season_from_directory(name: &str) -> Option<u32> {
+    let d = strip_noise(name);
+    cap(
+        &re(r"(?i)\b(?:season|сезон|saison|staffel)\s*\.?\s*(\d{1,3})\b"),
+        &d,
+        1,
+    )
+    .or_else(|| cap(&re(r"(?i)\bs\s*(\d{1,3})\b"), &d, 1))
+}
+
 /// Parse a file *stem* (no extension). `parent` is consulted only for a
 /// `Season 3`-style directory when the filename itself has no season.
 pub fn parse_episode(stem: &str, parent_dir: Option<&str>) -> ParsedEpisode {
@@ -96,15 +111,7 @@ pub fn parse_episode(stem: &str, parent_dir: Option<&str>) -> ParsedEpisode {
     }
 
     // A season may live in the directory name even when the file has none.
-    let season_from_dir = parent_dir.and_then(|d| {
-        let d = strip_noise(d);
-        cap(
-            &re(r"(?i)\b(?:season|сезон|saison|staffel)\s*\.?\s*(\d{1,3})\b"),
-            &d,
-            1,
-        )
-        .or_else(|| cap(&re(r"(?i)\bs\s*(\d{1,3})\b"), &d, 1))
-    });
+    let season_from_dir = parent_dir.and_then(season_from_directory);
     let season_from_name = cap(
         &re(r"(?i)\b(?:season|сезон|saison|staffel)\s*\.?\s*(\d{1,3})\b"),
         &s,
