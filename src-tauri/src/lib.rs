@@ -192,6 +192,7 @@ pub fn run() {
             commands::list_series,
             commands::add_series,
             commands::rescan_series,
+            commands::rescan_all_series,
             commands::remove_series,
             commands::reset_progress,
             commands::set_series_poster,
