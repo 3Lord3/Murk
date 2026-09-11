@@ -7,7 +7,9 @@
 
 use crate::library::db::ScannedEpisode;
 use crate::library::parse;
-use std::path::Path;
+use std::fs;
+use std::io;
+use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
 /// Container extensions Murk will hand to mpv.
@@ -29,18 +31,22 @@ fn is_video(path: &Path) -> bool {
 
 /// Sample files, extras and trailers are not episodes and would corrupt the
 /// ordering if treated as such.
+///
+/// Each marker must be a whole word: `sample.mkv` and `Show.Sample.mkv` are
+/// extras, but `sample-20s.mp4` is a clip named with a hyphen and must play.
+/// Dots, underscores and whitespace delimit words; a hyphen does not.
 fn is_extra(stem: &str) -> bool {
-    let s = stem.to_lowercase();
-    [
-        "sample",
-        "trailer",
-        "extras",
-        "featurette",
-        "behind the scenes",
-        "bonus",
-    ]
-    .iter()
-    .any(|marker| s.contains(marker))
+    let lower = stem.to_lowercase();
+    let tokens: Vec<&str> = lower
+        .split(|c: char| c == '.' || c == '_' || c.is_whitespace())
+        .filter(|t| !t.is_empty())
+        .collect();
+
+    let singles = ["sample", "trailer", "extras", "featurette", "bonus"];
+    if singles.iter().any(|marker| tokens.contains(marker)) {
+        return true;
+    }
+    tokens.windows(3).any(|w| w == ["behind", "the", "scenes"])
 }
 
 pub fn scan_series_folder(root: &Path) -> Vec<ScannedEpisode> {
@@ -86,6 +92,74 @@ pub fn display_name_for(root: &Path) -> String {
         .map(|n| n.replace(['.', '_'], " ").trim().to_string())
         .filter(|n| !n.is_empty())
         .unwrap_or_else(|| "Без названия".to_string())
+}
+
+// --- folders that hold whole series -----------------------------------------
+
+/// Max descent before a folder is treated as a series rather than walked forever.
+pub const MAX_CONTAINER_DEPTH: usize = 4;
+
+/// Max series a single "add folder" may create.
+pub const MAX_SERIES_TO_ADD: usize = 500;
+
+/// The immediate subfolders of `root`.
+pub fn subfolders(root: &Path) -> io::Result<Vec<PathBuf>> {
+    let mut dirs = Vec::new();
+    for entry in fs::read_dir(root)? {
+        let entry = entry?;
+        if entry.file_type()?.is_dir() {
+            dirs.push(entry.path());
+        }
+    }
+    Ok(dirs)
+}
+
+/// Whether `root` directly holds a playable video file, as opposed to holding
+/// only subfolders.
+pub fn has_direct_videos(root: &Path) -> bool {
+    fs::read_dir(root)
+        .map(|entries| {
+            entries
+                .flatten()
+                .any(|e| e.file_type().map(|t| t.is_file()).unwrap_or(false) && is_video(&e.path()))
+        })
+        .unwrap_or(false)
+}
+
+/// Whether any of `dirs` is named like a season folder ("Season 2", "S01").
+fn any_season_subfolder(dirs: &[PathBuf]) -> bool {
+    dirs.iter()
+        .filter_map(|p| p.file_name().and_then(|n| n.to_str()))
+        .any(|name| parse::season_from_directory(name).is_some())
+}
+
+/// The series roots the user means when they add `root`. A folder holding
+/// videos directly (or in `Season N` subfolders) is itself a series; any other
+/// folder is a container whose subfolders each become a series root.
+pub fn series_roots_to_add(root: &Path) -> Vec<PathBuf> {
+    let mut roots = Vec::new();
+    collect_series_roots(root, 0, &mut roots);
+    roots
+}
+
+fn collect_series_roots(root: &Path, depth: usize, out: &mut Vec<PathBuf>) {
+    let dirs = match subfolders(root) {
+        Ok(dirs) => dirs,
+        // An unreadable folder is treated as a single series.
+        Err(_) => {
+            out.push(root.to_path_buf());
+            return;
+        }
+    };
+    let is_series_folder =
+        has_direct_videos(root) || any_season_subfolder(&dirs) || dirs.is_empty();
+    if is_series_folder || depth >= MAX_CONTAINER_DEPTH {
+        out.push(root.to_path_buf());
+        return;
+    }
+    for sub in dirs {
+        collect_series_roots(&sub, depth + 1, out);
+    }
 }
 
 #[cfg(test)]
@@ -140,8 +214,96 @@ mod tests {
     }
 
     #[test]
+    fn standalone_samples_are_extras_but_hyphenated_clips_are_episodes() {
+        let root = tempdir();
+        for name in [
+            "sample.mkv",
+            "Show.Sample.mkv",
+            "sample-20s.mp4",
+            "Episode 1.mkv",
+        ] {
+            fs::write(root.join(name), b"").unwrap();
+        }
+
+        let found = scan_series_folder(&root);
+        let names: Vec<String> = found
+            .iter()
+            .map(|e| e.path.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(
+            names,
+            vec!["Episode 1.mkv".to_string(), "sample-20s.mp4".to_string()],
+            "standalone samples are dropped, a hyphenated clip is kept as an episode"
+        );
+
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
     fn display_name_comes_from_the_folder() {
         assert_eq!(display_name_for(Path::new("/x/The.Wire")), "The Wire");
         assert_eq!(display_name_for(Path::new("/x/Dark")), "Dark");
+    }
+
+    #[test]
+    fn a_plain_folder_with_videos_is_one_series() {
+        let root = tempdir();
+        fs::write(root.join("S01E01.mkv"), b"").unwrap();
+        assert_eq!(series_roots_to_add(&root), vec![root.clone()]);
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn a_folder_with_season_subfolders_is_one_series() {
+        let root = tempdir();
+        fs::create_dir_all(root.join("Season 1")).unwrap();
+        fs::write(root.join("Season 1/ep.mkv"), b"").unwrap();
+        assert_eq!(series_roots_to_add(&root), vec![root.clone()]);
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn season_plus_extras_stays_one_series() {
+        let root = tempdir();
+        fs::create_dir_all(root.join("Season 1")).unwrap();
+        fs::create_dir_all(root.join("Extras")).unwrap();
+        fs::write(root.join("Season 1/ep.mkv"), b"").unwrap();
+        fs::write(root.join("Extras/featurette.mkv"), b"").unwrap();
+        assert_eq!(series_roots_to_add(&root), vec![root.clone()]);
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn a_container_adds_each_series_inside_it() {
+        let root = tempdir();
+        let dark = root.join("Dark");
+        let wire = root.join("The Wire");
+        fs::create_dir_all(&dark).unwrap();
+        fs::create_dir_all(&wire).unwrap();
+        fs::write(dark.join("S01E01.mkv"), b"").unwrap();
+        fs::write(wire.join("S01E01.mkv"), b"").unwrap();
+
+        let roots = series_roots_to_add(&root);
+        assert_eq!(roots.len(), 2);
+        assert!(roots.contains(&dark));
+        assert!(roots.contains(&wire));
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn nested_containers_flatten_to_the_series_leaves() {
+        let root = tempdir();
+        let dark = root.join("Drama").join("Dark");
+        fs::create_dir_all(&dark).unwrap();
+        fs::write(dark.join("S01E01.mkv"), b"").unwrap();
+        assert_eq!(series_roots_to_add(&root), vec![dark]);
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn an_empty_folder_is_added_as_itself() {
+        let root = tempdir();
+        assert_eq!(series_roots_to_add(&root), vec![root.clone()]);
+        fs::remove_dir_all(&root).ok();
     }
 }
