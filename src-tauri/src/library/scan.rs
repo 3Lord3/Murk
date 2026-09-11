@@ -119,9 +119,9 @@ pub fn subfolders(root: &Path) -> io::Result<Vec<PathBuf>> {
 pub fn has_direct_videos(root: &Path) -> bool {
     fs::read_dir(root)
         .map(|entries| {
-            entries.flatten().any(|e| {
-                e.file_type().map(|t| t.is_file()).unwrap_or(false) && is_video(&e.path())
-            })
+            entries
+                .flatten()
+                .any(|e| e.file_type().map(|t| t.is_file()).unwrap_or(false) && is_video(&e.path()))
         })
         .unwrap_or(false)
 }
@@ -151,7 +151,8 @@ fn collect_series_roots(root: &Path, depth: usize, out: &mut Vec<PathBuf>) {
             return;
         }
     };
-    let is_series_folder = has_direct_videos(root) || any_season_subfolder(&dirs) || dirs.is_empty();
+    let is_series_folder =
+        has_direct_videos(root) || any_season_subfolder(&dirs) || dirs.is_empty();
     if is_series_folder || depth >= MAX_CONTAINER_DEPTH {
         out.push(root.to_path_buf());
         return;

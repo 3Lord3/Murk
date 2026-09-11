@@ -181,8 +181,7 @@ impl Library {
                 rows.iter()
                     .map(|(path, season, number, ..)| (*season, *number, path.as_path())),
             );
-            for (key, (_, _, _, position_ms, watched, updated_at)) in keys.iter().zip(rows.iter())
-            {
+            for (key, (_, _, _, position_ms, watched, updated_at)) in keys.iter().zip(rows.iter()) {
                 sidecar.set_progress(
                     key,
                     Entry {
@@ -398,17 +397,10 @@ impl Library {
     }
 
     /// Drop sidecar entries that no longer match an episode on disk.
-    fn prune_sidecar(
-        &self,
-        series_id: i64,
-        found: &[ScannedEpisode],
-        root: &Path,
-    ) -> Result<()> {
+    fn prune_sidecar(&self, series_id: i64, found: &[ScannedEpisode], root: &Path) -> Result<()> {
         let keep: HashSet<String> = unique_keys(
             root,
-            found
-                .iter()
-                .map(|e| (e.season, e.number, e.path.as_path())),
+            found.iter().map(|e| (e.season, e.number, e.path.as_path())),
         )
         .into_iter()
         .collect();
@@ -1220,7 +1212,10 @@ mod tests {
             .lock()
             .query_row("SELECT COUNT(*) FROM progress", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(remaining, 1, "progress for a missing folder is not discarded");
+        assert_eq!(
+            remaining, 1,
+            "progress for a missing folder is not discarded"
+        );
     }
 
     #[test]

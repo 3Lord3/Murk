@@ -271,23 +271,43 @@ mod tests {
     fn keys_use_numbers_when_present_and_relative_paths_otherwise() {
         let root = Path::new("/mnt/tv/Show");
         assert_eq!(
-            episode_key(Some(2), Some(10), root, Path::new("/mnt/tv/Show/S02E10.mkv")),
+            episode_key(
+                Some(2),
+                Some(10),
+                root,
+                Path::new("/mnt/tv/Show/S02E10.mkv")
+            ),
             "2/10"
         );
         // A renumbering keeps the key: numbers are the identity.
         assert_eq!(
-            episode_key(Some(2), Some(10), root, Path::new("/mnt/tv/Show/Season 2/ep.mkv")),
+            episode_key(
+                Some(2),
+                Some(10),
+                root,
+                Path::new("/mnt/tv/Show/Season 2/ep.mkv")
+            ),
             "2/10"
         );
         // No numbers -> the path relative to the folder, forward-slashed.
         assert_eq!(
-            episode_key(None, None, root, Path::new("/mnt/tv/Show/Season 2/Extra.mkv")),
+            episode_key(
+                None,
+                None,
+                root,
+                Path::new("/mnt/tv/Show/Season 2/Extra.mkv")
+            ),
             "Season 2/Extra.mkv"
         );
         // A move keeps the relative path too.
         let moved = Path::new("/mnt/backup/Show");
         assert_eq!(
-            episode_key(None, None, moved, Path::new("/mnt/backup/Show/Season 2/Extra.mkv")),
+            episode_key(
+                None,
+                None,
+                moved,
+                Path::new("/mnt/backup/Show/Season 2/Extra.mkv")
+            ),
             "Season 2/Extra.mkv"
         );
     }

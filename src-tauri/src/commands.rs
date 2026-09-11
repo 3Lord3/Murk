@@ -117,7 +117,10 @@ fn remember_subtitle_preference(state: &State<'_, AppState>, id: Option<i64>) {
         },
         None => "off".to_string(),
     };
-    if let Err(e) = state.library.set_subtitle_lang(current.series_id, Some(&value)) {
+    if let Err(e) = state
+        .library
+        .set_subtitle_lang(current.series_id, Some(&value))
+    {
         tracing::warn!("could not remember subtitle choice: {e}");
     }
 }
