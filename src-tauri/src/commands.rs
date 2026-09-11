@@ -101,7 +101,6 @@ fn remember_subtitle_preference(state: &State<'_, AppState>, id: Option<i64>) {
     let Some(current) = state.player.current() else {
         return;
     };
-    let key = format!("subtitle_lang:{}", current.series_id);
     // "off" is stored verbatim and is not a real language code. A track whose
     // language mpv did not report is left at the previous value.
     let value = match id {
@@ -118,7 +117,10 @@ fn remember_subtitle_preference(state: &State<'_, AppState>, id: Option<i64>) {
         },
         None => "off".to_string(),
     };
-    if let Err(e) = state.library.set_setting(&key, &value) {
+    if let Err(e) = state
+        .library
+        .set_subtitle_lang(current.series_id, Some(&value))
+    {
         tracing::warn!("could not remember subtitle choice: {e}");
     }
 }
@@ -190,6 +192,11 @@ pub struct SeriesCard {
 
 #[tauri::command]
 pub fn list_series(state: State<'_, AppState>) -> CommandResult<Vec<SeriesCard>> {
+    // Drop rows whose folders are gone (the sidecar keeps their progress);
+    // keep any still holding un-migrated legacy progress.
+    if let Err(e) = state.library.prune_missing_series() {
+        tracing::warn!("could not prune missing series: {e}");
+    }
     let series = state
         .library
         .list_series()
@@ -200,8 +207,6 @@ pub fn list_series(state: State<'_, AppState>) -> CommandResult<Vec<SeriesCard>>
         .into_iter()
         .map(|s| {
             let has_progress = state.library.has_progress(s.id).unwrap_or(false);
-            // "Continue" is about the series, not a half-watched file:
-            // anything remembered plus anything left to play.
             let in_progress =
                 has_progress && state.library.resume_target(s.id).ok().flatten().is_some();
             let progress = show_progress
@@ -252,45 +257,92 @@ fn discover_poster(state: &AppState, series_id: i64) {
     }
 }
 
-/// Add a series by **folder**.
-///
-/// The file chooser is only ever opened at folder level: its list view prints
-/// filenames, and `S02E08 - Endings and Beginnings.mkv` is a spoiler the user
-/// cannot unsee. The folder name they navigate to, they have already read.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AddSeriesCount {
+    /// Series added from the folder.
+    added: u32,
+    /// Series left out by the per-folder cap.
+    skipped: u32,
+}
+
+/// Add a series by **folder**. A folder of whole shows adds all of them; a
+/// plain series folder adds the one series it holds. Reports how many were
+/// added and how many the per-folder cap left out.
 #[tauri::command]
-pub fn add_series(state: State<'_, AppState>, path: PathBuf) -> CommandResult<i64> {
+pub fn add_series(state: State<'_, AppState>, path: PathBuf) -> CommandResult<AddSeriesCount> {
     if !path.is_dir() {
         return Err("not_a_folder".into());
     }
-    let name = scan::display_name_for(&path);
-    let id = state
-        .library
-        .add_series(&path, &name)
-        .map_err(fail("could_not_add_series"))?;
-    let found = scan::scan_series_folder(&path);
-    state
-        .library
-        .sync_episodes(id, &found)
-        .map_err(fail("could_not_index_series"))?;
-    discover_poster(&state, id);
-    Ok(id)
+    let roots = scan::series_roots_to_add(&path);
+    let mut added = 0u32;
+    for series_root in roots.iter().take(scan::MAX_SERIES_TO_ADD) {
+        let name = scan::display_name_for(series_root);
+        let id = state
+            .library
+            .add_series(series_root, &name)
+            .map_err(fail("could_not_add_series"))?;
+        let found = scan::scan_series_folder(series_root);
+        state
+            .library
+            .sync_episodes(id, &found)
+            .map_err(fail("could_not_index_series"))?;
+        discover_poster(&state, id);
+        added += 1;
+    }
+    Ok(AddSeriesCount {
+        added,
+        skipped: (roots.len() as u32).saturating_sub(added),
+    })
 }
 
 #[tauri::command]
 pub fn rescan_series(state: State<'_, AppState>, series_id: i64) -> CommandResult<()> {
+    rescan_one(&state, series_id)
+}
+
+/// Re-index every series' folder in one go: drop series whose folders are gone
+/// and pick up new or renamed files everywhere else. Returns how many folders
+/// were scanned.
+#[tauri::command]
+pub fn rescan_all_series(state: State<'_, AppState>) -> CommandResult<u32> {
+    // Prune first so missing folders don't fall through as rescan failures.
+    if let Err(e) = state.library.prune_missing_series() {
+        tracing::warn!("could not prune missing series: {e}");
+    }
     let series = state
         .library
         .list_series()
+        .map_err(fail("library_read_failed"))?;
+    let mut scanned = 0u32;
+    for s in series {
+        // A folder gone since the prune logs a failure instead of wiping it.
+        match rescan_one(&state, s.id) {
+            Ok(()) => scanned += 1,
+            Err(e) => tracing::warn!("rescan of series {} failed: {e}", s.id),
+        }
+    }
+    Ok(scanned)
+}
+
+/// Scan one series' folder into the database and refresh its cover. Shared by
+/// the single-series rescan and the rescan-all command.
+fn rescan_one(state: &AppState, series_id: i64) -> CommandResult<()> {
+    let series = state
+        .library
+        .series(series_id)
         .map_err(fail("library_read_failed"))?
-        .into_iter()
-        .find(|s| s.id == series_id)
         .ok_or_else(|| "no_such_series".to_string())?;
+    // Guard against wiping the episode list for a folder that is missing.
+    if !series.root_path.is_dir() {
+        return Err("series_folder_missing".into());
+    }
     let found = scan::scan_series_folder(&series.root_path);
     state
         .library
         .sync_episodes(series_id, &found)
         .map_err(fail("rescan_failed"))?;
-    discover_poster(&state, series_id);
+    discover_poster(state, series_id);
     Ok(())
 }
 
@@ -374,20 +426,13 @@ pub fn reset_progress(state: State<'_, AppState>, series_id: i64) -> CommandResu
 }
 
 /// Start, or continue, a series.
-///
-/// Which file this is and where it resumes are decided here, in Rust, from the
-/// database. The frontend passes a series id and receives nothing back but
-/// success.
 #[tauri::command]
 pub fn continue_series(
     app: AppHandle,
     state: State<'_, AppState>,
     series_id: i64,
 ) -> CommandResult<()> {
-    // A series watched to the end has no resume target, so it falls back to
-    // the first episode: a rewatch, which is why the card says "Start".
-    // Same predicate the card's label is built from, so the button the user
-    // pressed and the behaviour they get cannot drift apart.
+    // A watched-to-the-end series has no resume target and restarts.
     let episode = match state
         .library
         .resume_target(series_id)
@@ -401,7 +446,10 @@ pub fn continue_series(
             .ok_or_else(|| "no_video_files".to_string())?,
     };
 
-    let start_ms = state.library.resume_position_ms(episode.id).unwrap_or(0);
+    let start_ms = state
+        .library
+        .resume_position_ms(series_id, &episode)
+        .unwrap_or(0);
     play_episode(&app, &state, &episode, start_ms)
 }
 

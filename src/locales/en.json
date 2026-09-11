@@ -18,6 +18,7 @@
     "could_not_index_series": "Could not index the series.",
     "no_such_series": "There is no such series.",
     "rescan_failed": "The rescan failed.",
+    "series_folder_missing": "The series folder is missing.",
     "unsupported_image_type": "Choose a JPG, PNG or WebP image.",
     "could_not_read_image": "Could not read the image.",
     "image_empty": "The chosen file is empty.",
@@ -43,6 +44,8 @@
   "library": {
     "title": "Library",
     "addFolder": "Add a folder",
+    "rescanAll": "Rescan all",
+    "folderTooLarge": "Some series were not added: one folder holds more than Murk adds at once. Add the rest separately.",
     "settings": "Settings",
     "empty": {
       "lead": "Nothing here yet.",

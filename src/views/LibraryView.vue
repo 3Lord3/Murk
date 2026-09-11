@@ -42,8 +42,30 @@ async function addFolder() {
   // spoiler the user cannot unsee.
   const picked = await open({ directory: true, multiple: false, title: t("library.dialog.folderTitle") });
   if (typeof picked === "string") {
-    await library.add(picked);
+    await runAction(async () => {
+      const { skipped } = await library.add(picked);
+      // Tell the user if the per-folder cap left series out.
+      if (skipped > 0) library.notice = t("library.folderTooLarge");
+    });
   }
+}
+
+// Prevent a second add/rescan from starting while one is running.
+const busy = ref(false);
+async function runAction(action: () => Promise<void>) {
+  if (busy.value) return;
+  busy.value = true;
+  try {
+    await action();
+  } catch (e) {
+    library.error = String(e);
+  } finally {
+    busy.value = false;
+  }
+}
+
+async function rescanAll() {
+  await runAction(() => library.rescanAll());
 }
 
 async function watch(seriesId: number) {
@@ -87,7 +109,7 @@ async function choosePoster(seriesId: number) {
 
 async function rescanSeries(seriesId: number) {
   closeMenu();
-  await library.rescan(seriesId);
+  await runAction(() => library.rescan(seriesId));
 }
 
 // The pending destructive action, or null when no dialog is up. Holding the
@@ -132,12 +154,14 @@ async function clearPoster(seriesId: number) {
       <header :class="$style.header">
         <h1 :class="$style.title">{{ t("library.title") }}</h1>
         <div :class="$style.headerActions">
-          <button :class="$style.btn" @click="addFolder">{{ t("library.addFolder") }}</button>
+          <button :class="$style.btn" :disabled="busy" @click="addFolder">{{ t("library.addFolder") }}</button>
+          <button :class="$style.btn" :disabled="busy" @click="rescanAll">{{ t("library.rescanAll") }}</button>
           <button :class="$style.btn" @click="router.push('/settings')">{{ t("library.settings") }}</button>
         </div>
       </header>
 
       <p v-if="library.error" :class="$style.error">{{ errorMessage(library.error) }}</p>
+      <p v-if="library.notice" :class="$style.notice">{{ library.notice }}</p>
 
       <div v-if="!library.loading && library.series.length === 0" :class="$style.empty">
         <p :class="$style.emptyLead">{{ t("library.empty.lead") }}</p>
@@ -452,6 +476,16 @@ async function clearPoster(seriesId: number) {
   padding: 0.75rem 1rem;
   font-size: 0.875rem;
   color: #fecaca;
+}
+
+.notice {
+  margin-bottom: 1.5rem;
+  border-radius: var(--r-md);
+  background: var(--c-glass);
+  box-shadow: inset 0 0 0 1px var(--c-hairline-soft);
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  color: var(--c-text);
 }
 
 .empty {
