@@ -23,10 +23,13 @@ export const useLibraryStore = defineStore("library", () => {
   const loading = ref(false);
   /** The failure *code* from the last command, never a ready-made sentence. */
   const error = ref<string | null>(null);
+  /** A non-fatal heads-up in user-facing words (a folder with more series than the cap allows). */
+  const notice = ref<string | null>(null);
 
   async function refresh() {
     loading.value = true;
     error.value = null;
+    notice.value = null;
     try {
       series.value = await invoke<SeriesCard[]>("list_series");
     } catch (e) {
@@ -37,8 +40,15 @@ export const useLibraryStore = defineStore("library", () => {
   }
 
   async function add(path: string) {
-    await invoke("add_series", { path });
-    await refresh();
+    // Refresh even if the command failed partway: a container folder can have
+    // added some series before one of them errored, and the grid should show
+    // what actually landed. Returns the outcome so the caller can tell the
+    // user when the per-folder cap left series out.
+    try {
+      return await invoke<{ added: number; skipped: number }>("add_series", { path });
+    } finally {
+      await refresh();
+    }
   }
 
   async function remove(seriesId: number) {
@@ -48,6 +58,11 @@ export const useLibraryStore = defineStore("library", () => {
 
   async function rescan(seriesId: number) {
     await invoke("rescan_series", { seriesId });
+    await refresh();
+  }
+
+  async function rescanAll() {
+    await invoke("rescan_all_series");
     await refresh();
   }
 
@@ -66,5 +81,5 @@ export const useLibraryStore = defineStore("library", () => {
     await refresh();
   }
 
-  return { series, loading, error, refresh, add, remove, rescan, resetProgress, setPoster, clearPoster };
+  return { series, loading, error, notice, refresh, add, remove, rescan, rescanAll, resetProgress, setPoster, clearPoster };
 });
