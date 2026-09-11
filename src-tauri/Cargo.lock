@@ -1945,6 +1945,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "walkdir",
+ "windows",
 ]
 
 [[package]]

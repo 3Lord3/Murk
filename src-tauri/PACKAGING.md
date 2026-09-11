@@ -65,3 +65,25 @@ video player on XWayland in every Wayland session and hand mpv an X11
 honour the session (an explicit `GDK_BACKEND` still wins), and repacks the
 AppDir. It fails loudly if the hook stops forcing x11, so the patch cannot
 outlive the bug it works around.
+
+## Windows
+
+Two files carry the Windows packaging, and they exist for one reason each.
+
+`tauri.windows.conf.json` is a platform config Tauri merges into
+`tauri.conf.json` on Windows only. It has to be a separate file because
+`bundle.resources` is not per-platform: listing `mpv/bin/libmpv-2.dll` in the
+main config would fail every Linux build, where that file does not exist. It
+declares the NSIS and MSI targets, bundles the DLL next to `murk.exe`, and asks
+the installer to fetch WebView2 if the machine has none (Windows 11 does).
+
+`scripts/deps.ps1` is the counterpart to `deps.sh`: it downloads the upstream
+libmpv build and derives `mpv.lib` from `mpv.def` with `lib.exe`, because
+`libmpv2-sys` emits `cargo:rustc-link-lib=mpv` and MSVC cannot link a DLL
+directly. `/name:libmpv-2.dll` is not optional — without it the import library
+records the *def file's* name and the program starts looking for `mpv.dll`.
+
+Unlike the Linux packages, nothing here is declared by hand and then verified:
+the DLL either sits beside the executable or the program does not start, which
+is a failure a smoke run catches immediately. `check-package-deps.sh` has no
+Windows counterpart for that reason.

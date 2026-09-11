@@ -52,7 +52,7 @@ fn init_tracing() {
     use tracing_subscriber::EnvFilter;
     // Paths are logged at `trace` only, which is off unless someone asks for
     // it: a debug log printing filenames would undo the point of the program.
-    let filter = EnvFilter::try_from_env("MURK_LOG").unwrap_or_else(|_| EnvFilter::new("info"));
+    let filter = EnvFilter::try_from_env("MURK_LOG").unwrap_or_else(|_| EnvFilter::new("debug"));
     let _ = tracing_subscriber::fmt()
         .with_env_filter(filter)
         .with_target(false)
@@ -103,7 +103,11 @@ fn silence_benign_glib_critical() {
     }
 }
 
-fn build_state(app: &tauri::App) -> Result<AppState> {
+/// `embed_window` is the native handle mpv should render into, on platforms
+/// where mpv owns the drawing; see [`player::PlayerHandle::new`]. It has to be
+/// known here, before the mpv instance is created, which is why the video
+/// window is made first and the surface only attached afterwards.
+fn build_state(app: &tauri::App, embed_window: Option<i64>) -> Result<AppState> {
     let data_dir = app
         .path()
         .app_data_dir()
@@ -122,7 +126,9 @@ fn build_state(app: &tauri::App) -> Result<AppState> {
         .unwrap_or_default();
     tracing::info!("hiding profile: {}", profile.id);
 
-    let player = PlayerHandle::new(profile)?;
+    tracing::debug!(?embed_window, "creating mpv player");
+    let player = PlayerHandle::new(profile, embed_window)?;
+    tracing::info!("mpv player created");
 
     Ok(AppState {
         player,
@@ -141,12 +147,15 @@ pub fn run() {
     set_wm_identity();
 
     init_tracing();
+    tracing::info!("murk starting");
     // Before the GTK main loop exists, so no message can slip past the filter.
     #[cfg(target_os = "linux")]
     silence_benign_glib_critical();
 
     // libmpv resolves GL entry points through a callback, so the loader has to
-    // be standing before any render context is created.
+    // be standing before any render context is created. Windows hands mpv a
+    // window instead of a framebuffer, so there is no loader to stand up.
+    #[cfg(target_os = "linux")]
     if let Err(e) = player::render::init_gl_loader() {
         eprintln!("Murk: {e:#}");
         std::process::exit(1);
@@ -155,14 +164,24 @@ pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
-            let state = build_state(app)?;
-            let shutdown = Arc::clone(&state.shutdown);
-            app.manage(state);
-
             let window = app
                 .get_webview_window("main")
                 .context("the main window is missing from tauri.conf.json")?;
             window.set_title(privacy::leaks::WINDOW_TITLE)?;
+
+            // Windows only: the video child window must exist before mpv does,
+            // because its handle is the `wid` mpv is initialised with.
+            #[cfg(target_os = "windows")]
+            let win_surface = player::surface_win::WinSurface::new(&window)?;
+            #[cfg(target_os = "windows")]
+            let embed_window = Some(win_surface.hwnd());
+            #[cfg(not(target_os = "windows"))]
+            let embed_window = None;
+
+            tracing::info!(?embed_window, "main window ready, building player state");
+            let state = build_state(app, embed_window)?;
+            let shutdown = Arc::clone(&state.shutdown);
+            app.manage(state);
 
             #[cfg(target_os = "linux")]
             {
@@ -172,12 +191,25 @@ pub fn run() {
                 surface.attach(&window)?;
             }
 
+            #[cfg(target_os = "windows")]
+            {
+                use player::surface::PlayerSurface;
+                tracing::debug!("attaching win32 video surface");
+                win_surface.attach(&window)?;
+                // Managed rather than leaked: the surface has to outlive setup
+                // because it owns the resize hook, and handing it to Tauri
+                // keeps `detach` reachable for a caller that wants to stop the
+                // video before the window goes away.
+                app.manage(win_surface);
+            }
+
             // This thread owns the only `wait_event` call in the process.
             let handle = app.handle().clone();
             std::thread::Builder::new()
                 .name("murk-mpv-events".into())
                 .spawn(move || player::events::run(handle, shutdown))?;
 
+            tracing::info!("setup complete");
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

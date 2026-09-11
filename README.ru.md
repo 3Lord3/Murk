@@ -78,12 +78,28 @@ Murk, это настольный плеер для сериалов и филь
 
 # Установка
 
-Murk нацелен на Linux и находится в статусе пре-релиза (v0.1.0). Готовые пакеты
-всех перечисленных ниже каналов — `.deb`, `.rpm`, AppImage и Flatpak-бандл
-вместе с `SHA256SUMS` — приложены к каждому
-[релизу](https://github.com/3Lord3/Murk/releases/latest). В репозиториях
-дистрибутивов и на Flathub его пока нет, так что второй способ получить его —
-сборка из исходников, это три команды:
+Murk работает на Linux и Windows и находится в статусе пре-релиза (v0.1.0).
+Скачать можно из [последнего релиза](https://github.com/3Lord3/Murk/releases/latest):
+там лежат все сборки и `SHA256SUMS`.
+
+| Платформа | Файл | Примечание |
+|---|---|---|
+| Debian, Ubuntu | `.deb` | нужен `libmpv2` (mpv ≥ 0.36) |
+| Fedora | `.rpm` | нужен `mpv-libs` |
+| любой Linux | AppImage | самодостаточный, системный mpv не нужен |
+| любой Linux | `.flatpak` | `flatpak install Murk_0.1.0_x86_64.flatpak` |
+| Windows 10, 11 | `.exe` | установщик; рядом лежит и `.msi`, для развёртывания |
+
+Дистрибутивам, где всё ещё `libmpv.so.1` (Ubuntu 22.04, Debian 12), подойдут
+AppImage или Flatpak: они несут mpv в себе. В репозиториях дистрибутивов, на
+Flathub и в winget Murk пока нет.
+
+# Сборка
+
+Обеим платформам нужны pnpm, Node 22 и стабильный Rust; всё остальное — libmpv,
+и он должен быть **client API 2.x** (`libmpv.so.2`, mpv ≥ 0.36).
+
+## Linux
 
 ```sh
 ./scripts/deps.sh --install   # системные библиотеки; --check только покажет их
@@ -91,36 +107,44 @@ pnpm install
 pnpm tauri build              # либо `pnpm tauri dev`, чтобы сразу запустить
 ```
 
-Самой сборке нужны pnpm, Node 22 и стабильный Rust. Всё остальное это
-системные библиотеки, и `deps.sh` знает их названия для Debian, Ubuntu, Fedora
-и Arch.
+`deps.sh` знает названия пакетов для ALT, Debian, Ubuntu, Fedora и Arch.
 
-libmpv нужен **client API 2.x** (`libmpv.so.2`, mpv ≥ 0.36); если версия
-старее, сборка остановится именно с этой фразой, а не со стеной ошибок
-компоновщика. Дистрибутивы, где всё ещё `libmpv.so.1`, прежде всего
-Ubuntu 22.04 и Debian 12, обслуживаются Flatpak-сборкой.
+## Windows
+
+Здесь libmpv нет ни в одном пакетном менеджере, поэтому `scripts/deps.ps1`
+скачивает его и собирает импорт-библиотеку, которая нужна компоновщику MSVC. Для
+этого шага понадобятся сборочные инструменты Visual Studio (ради `lib.exe`) и
+7-Zip, а тулчейн Rust должен быть MSVC.
+
+```powershell
+pwsh -File scripts/deps.ps1
+$env:MPV_LIB_DIR = "$PWD\src-tauri\mpv\lib"
+$env:PATH = "$PWD\src-tauri\mpv\bin;$env:PATH"   # отсюда dev-сборка возьмёт DLL
+pnpm install
+pnpm tauri build --bundles nsis          # либо `pnpm tauri dev`
+```
+
+Сборка читает `MPV_LIB_DIR`; без неё она останавливается и прямо об этом
+сообщает. `libmpv-2.dll` кладётся в установщик, так что установленной копии
+ничего в `PATH` не нужно.
 
 ## Пакеты
 
 Готовые пакеты складываются в `src-tauri/target/release/bundle/`.
 
-| Канал | Дистрибутивы | Чем собрать | Статус |
-|---|---|---|---|
-| `.deb` | Debian, Ubuntu | `pnpm tauri build --bundles deb` | работает; собирается и проверяется в CI |
-| `.rpm` | Fedora | `pnpm tauri build --bundles rpm` | работает; зависимости по soname |
-| AppImage | все | `./scripts/appimage.sh` | работает; несёт в себе mpv и WebKitGTK |
-| Flatpak | все | [`packaging/flatpak/`](packaging/flatpak/README.md) | работает; воспроизведение в песочнице проверено |
+| Канал | Чем собрать |
+|---|---|
+| `.deb`, `.rpm` | `pnpm tauri build --bundles deb,rpm` |
+| AppImage | `./scripts/appimage.sh` |
+| Flatpak | [`packaging/flatpak/`](packaging/flatpak/README.md) |
+| `.exe` (NSIS), `.msi` | `pnpm tauri build --bundles nsis,msi` |
 
-AppImage собирайте скриптом, а не через `tauri build --bundles appimage`:
-хук AppRun от Tauri принудительно выставляет `GDK_BACKEND=x11`, что затащило бы
-видеоплеер в XWayland в любой Wayland-сессии. Скрипт это отменяет и
-переупаковывает образ.
+AppImage собирайте скриптом, а не через `tauri build --bundles appimage`: хук
+AppRun от Tauri принудительно выставляет `GDK_BACKEND=x11`, что затащило бы
+видеоплеер в XWayland в любой Wayland-сессии, а скрипт это отменяет.
 
-Зависимости пакетов прописаны вручную: сборщик Tauri не запускает ни
-`dpkg-shlibdeps`, ни ELF-сканер rpm и иначе выпустил бы пакет, который ставится
-без ошибок, а потом не стартует. В CI за этим следит
-`scripts/check-package-deps.sh`, а рассуждение целиком лежит в
-[src-tauri/PACKAGING.md](src-tauri/PACKAGING.md).
+Зависимости пакетов прописаны вручную, а не выведены автоматически; рассуждение
+целиком лежит в [src-tauri/PACKAGING.md](src-tauri/PACKAGING.md).
 
 # Разработка
 
