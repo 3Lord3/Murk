@@ -5,7 +5,7 @@
 **Смотрите сериал, а не таймлайн.**
 
 <a href="https://github.com/3Lord3/Murk/actions"><img alt="build" src="https://img.shields.io/github/actions/workflow/status/3Lord3/Murk/ci.yml?style=for-the-badge&labelColor=0f131b&label=build"></a>
-<a href="#%D1%83%D1%81%D1%82%D0%B0%D0%BD%D0%BE%D0%B2%D0%BA%D0%B0"><img alt="version" src="https://img.shields.io/badge/version-0.1.0-c084fc?style=for-the-badge&labelColor=0f131b"></a>
+<a href="#%D1%83%D1%81%D1%82%D0%B0%D0%BD%D0%BE%D0%B2%D0%BA%D0%B0"><img alt="version" src="https://img.shields.io/badge/version-0.2.0-c084fc?style=for-the-badge&labelColor=0f131b"></a>
 <a href="#%D0%BB%D0%B8%D1%86%D0%B5%D0%BD%D0%B7%D0%B8%D1%8F"><img alt="license" src="https://img.shields.io/badge/license-GPL--2.0--or--later-e2e8f0?style=for-the-badge&labelColor=0f131b"></a>
 <a href="https://tauri.app"><img alt="Tauri 2" src="https://img.shields.io/badge/Tauri_2-6d76ff?style=for-the-badge&labelColor=0f131b&logo=tauri&logoColor=white"></a>
 <a href="https://www.rust-lang.org"><img alt="Rust backend" src="https://img.shields.io/badge/Rust_backend-5eead4?style=for-the-badge&labelColor=0f131b&logo=rust&logoColor=white"></a>
@@ -87,7 +87,7 @@ Murk работает на Linux и Windows.
 | Debian, Ubuntu | `.deb` | нужен `libmpv2` (mpv ≥ 0.36) |
 | Fedora | `.rpm` | нужен `mpv-libs` |
 | любой Linux | AppImage | самодостаточный, системный mpv не нужен |
-| любой Linux | `.flatpak` | `flatpak install Murk_0.1.0_x86_64.flatpak` |
+| любой Linux | `.flatpak` | `flatpak install Murk_0.2.0_x86_64.flatpak` |
 | Windows 10, 11 | `.exe`, `.msi` |  |
 
 Дистрибутивам, где всё ещё `libmpv.so.1` (Ubuntu 22.04, Debian 12), подойдут
