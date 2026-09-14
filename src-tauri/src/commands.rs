@@ -8,7 +8,7 @@ use serde::Serialize;
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager, State};
 
-use crate::library::{poster, scan, WATCHED_FRACTION};
+use crate::library::{poster, scan, MediaKind, WATCHED_FRACTION};
 use crate::player::{events, inhibit, TrackKind};
 use crate::privacy::{HidingProfile, PeekMode, PlaybackView};
 use crate::AppState;
@@ -217,6 +217,8 @@ pub struct SeriesCard {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub progress: Option<f64>,
     pub poster: Option<String>,
+    /// The shelf this work sits on.
+    pub kind: MediaKind,
 }
 
 #[tauri::command]
@@ -253,6 +255,7 @@ pub fn list_series(state: State<'_, AppState>) -> CommandResult<Vec<SeriesCard>>
                 has_progress,
                 progress,
                 poster,
+                kind: s.kind,
             }
         })
         .collect())
@@ -295,21 +298,24 @@ pub struct AddSeriesCount {
     skipped: u32,
 }
 
-/// Add a series by **folder**. A folder of whole shows adds all of them; a
-/// plain series folder adds the one series it holds. Reports how many were
-/// added and how many the per-folder cap left out.
+/// Add a work by **folder** to the shelf `kind` the user picked.
 #[tauri::command]
-pub fn add_series(state: State<'_, AppState>, path: PathBuf) -> CommandResult<AddSeriesCount> {
+pub fn add_series(
+    state: State<'_, AppState>,
+    path: PathBuf,
+    kind: String,
+) -> CommandResult<AddSeriesCount> {
     if !path.is_dir() {
         return Err("not_a_folder".into());
     }
+    let kind = MediaKind::parse(&kind).ok_or_else(|| "unknown_kind".to_string())?;
     let roots = scan::series_roots_to_add(&path);
     let mut added = 0u32;
     for series_root in roots.iter().take(scan::MAX_SERIES_TO_ADD) {
         let name = scan::display_name_for(series_root);
         let id = state
             .library
-            .add_series(series_root, &name)
+            .add_series(series_root, &name, kind)
             .map_err(fail("could_not_add_series"))?;
         let found = scan::scan_series_folder(series_root);
         state
