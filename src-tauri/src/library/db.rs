@@ -734,6 +734,20 @@ impl Library {
             sidecar.subtitle_lang = lang.map(str::to_string);
         })
     }
+
+    // --- per-series audio preference (the sidecar file) -------------------
+
+    /// The audio language last chosen for this series.
+    pub fn preferred_audio_lang(&self, series_id: i64) -> Result<Option<String>> {
+        Ok(self.cached_sidecar(series_id)?.audio_lang.clone())
+    }
+
+    /// Remember the chosen audio language for a series. `None` clears it.
+    pub fn set_audio_lang(&self, series_id: i64, lang: Option<&str>) -> Result<()> {
+        self.update_sidecar(series_id, |sidecar| {
+            sidecar.audio_lang = lang.map(str::to_string);
+        })
+    }
 }
 
 /// One sidecar key per `(season, number, path)`; episodes that share a season

@@ -126,6 +126,34 @@ fn apply_preferred_subtitle(state: &tauri::State<'_, AppState>, subs: &[Track]) 
     true
 }
 
+/// Re-select the audio language remembered for this series, if any. Returns
+/// whether the selection changed, so the caller can re-read `selected` flags.
+///
+/// mpv assigns fresh track ids per file, so a language is the only stable
+/// identity. With no match, mpv keeps its default.
+fn apply_preferred_audio(state: &tauri::State<'_, AppState>, audio: &[Track]) -> bool {
+    let Some(current) = state.player.current() else {
+        return false;
+    };
+    let Ok(Some(pref)) = state.library.preferred_audio_lang(current.series_id) else {
+        return false;
+    };
+    let Some(target) = audio
+        .iter()
+        .find(|t| t.lang.as_deref() == Some(pref.as_str()))
+    else {
+        return false;
+    };
+    if target.selected {
+        return false;
+    }
+    if let Err(e) = state.player.set_track(TrackKind::Audio, Some(target.id)) {
+        tracing::warn!("could not apply remembered audio: {e}");
+        return false;
+    }
+    true
+}
+
 /// Run the mpv event loop until the player shuts down. Owns the only
 /// `wait_event` call in the process.
 pub fn run(app: AppHandle, shutdown: Arc<AtomicBool>) {
@@ -245,7 +273,9 @@ pub fn run(app: AppHandle, shutdown: Arc<AtomicBool>) {
                 // mpv finalises default track selection during load and would
                 // clobber a `sid` set earlier, so re-read after `FileLoaded`.
                 let (audio, subs) = read_tracks(mpv);
-                let (audio, subs) = if apply_preferred_subtitle(&state, &subs) {
+                let changed = apply_preferred_audio(&state, &audio)
+                    || apply_preferred_subtitle(&state, &subs);
+                let (audio, subs) = if changed {
                     read_tracks(mpv)
                 } else {
                     (audio, subs)

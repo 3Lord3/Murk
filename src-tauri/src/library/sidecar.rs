@@ -48,6 +48,10 @@ pub struct Sidecar {
     /// The subtitle language the user last chose for this series, or "off".
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub subtitle_lang: Option<String>,
+    /// The audio language the user last chose for this series. Unlike
+    /// subtitles there is no "off" choice, so `None` means "never chosen".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audio_lang: Option<String>,
     /// Unknown fields from a newer build, carried across a round-trip.
     #[serde(flatten)]
     pub extra: BTreeMap<String, serde_json::Value>,
@@ -112,7 +116,10 @@ impl Sidecar {
 
     /// Whether the file carries any data worth keeping.
     pub fn has_data(&self) -> bool {
-        !self.progress.is_empty() || self.subtitle_lang.is_some() || !self.extra.is_empty()
+        !self.progress.is_empty()
+            || self.subtitle_lang.is_some()
+            || self.audio_lang.is_some()
+            || !self.extra.is_empty()
     }
 
     pub fn progress_for(&self, key: &str) -> Option<Entry> {
