@@ -32,6 +32,8 @@ mod prop {
     pub const TRACK_LIST: u64 = 5;
     pub const VOLUME: u64 = 6;
     pub const IDLE_ACTIVE: u64 = 7;
+    pub const AUDIO_TRACK: u64 = 8;
+    pub const SUBTITLE_TRACK: u64 = 9;
 }
 
 /// How often a view is pushed to the frontend while playing.
@@ -55,6 +57,10 @@ pub fn observe_properties(mpv: &Mpv) -> anyhow::Result<()> {
     // Observing the *count* gives a plain integer that changes whenever the
     // track set does; the details are read back one sub-property at a time.
     mpv.observe_property("track-list/count", Format::Int64, prop::TRACK_LIST)?;
+    // Switching a track does not change the *count*, so `selected` flags would
+    // stay stale without watching `aid`/`sid`.
+    mpv.observe_property("aid", Format::String, prop::AUDIO_TRACK)?;
+    mpv.observe_property("sid", Format::String, prop::SUBTITLE_TRACK)?;
     Ok(())
 }
 
@@ -214,7 +220,9 @@ pub fn run(app: AppHandle, shutdown: Arc<AtomicBool>) {
                     // flag on `StartFile` would let that stale event end an
                     // episode a second into it.
                     (prop::EOF_REACHED, PropertyData::Flag(false)) => advancing = false,
-                    (prop::TRACK_LIST, _) => {
+                    (prop::TRACK_LIST, _)
+                    | (prop::AUDIO_TRACK, _)
+                    | (prop::SUBTITLE_TRACK, _) => {
                         drop(st);
                         let (audio, subs) = read_tracks(mpv);
                         let mut st = state.player.state_mut();
