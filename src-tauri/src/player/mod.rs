@@ -38,6 +38,13 @@ const MPV_OPTIONS: &[(&str, &str)] = &[
     // End of file is Murk's business (auto-advance), not mpv's.
     ("keep-open", "yes"),
     ("terminal", "no"),
+    // Subtitles are off until the user says otherwise. mpv would otherwise
+    // auto-select the container's default (usually the first) subtitle track on
+    // load, showing it for a moment before the remembered choice is applied in
+    // `FileLoaded`. An empty `slang` matches nothing, and `subs-fallback=no`
+    // stops mpv substituting a default-flagged track in its place.
+    ("slang", ""),
+    ("subs-fallback", "no"),
     // -- anti-spoiler -------------------------------------------------------
     // ~/.config/mpv may enable an OSC, an MPRIS script, a progress bar. None of
     // that is ours to audit, so none of it is loaded.
