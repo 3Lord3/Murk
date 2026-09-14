@@ -88,7 +88,7 @@ Murk работает на Linux и Windows.
 | Fedora | `.rpm` | нужен `mpv-libs` |
 | любой Linux | AppImage | самодостаточный, системный mpv не нужен |
 | любой Linux | `.flatpak` | `flatpak install Murk_0.1.0_x86_64.flatpak` |
-| Windows 10, 11 | `.exe` | установщик; рядом лежит и `.msi`, для развёртывания |
+| Windows 10, 11 | `.exe`, `.msi` |  |
 
 Дистрибутивам, где всё ещё `libmpv.so.1` (Ubuntu 22.04, Debian 12), подойдут
 AppImage или Flatpak: они несут mpv в себе.

@@ -88,7 +88,7 @@ attached there, together with `SHA256SUMS`.
 | Fedora | `.rpm` | needs `mpv-libs` |
 | any Linux | AppImage | self-contained, no system mpv needed |
 | any Linux | `.flatpak` | `flatpak install Murk_0.1.0_x86_64.flatpak` |
-| Windows 10, 11 | `.exe` | installer; `.msi` is there too, for deployment |
+| Windows 10, 11 | `.exe`, `.msi` |  |
 
 Distributions still shipping `libmpv.so.1` (Ubuntu 22.04, Debian 12) should take
 the AppImage or the Flatpak, which carry their own mpv.
