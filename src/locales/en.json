@@ -35,7 +35,8 @@
     "peek_disabled": "Peeking is switched off in this profile.",
     "nothing_playing": "Nothing is playing right now.",
     "could_not_read_setting": "Could not read the setting.",
-    "could_not_save_setting": "Could not save the setting."
+    "could_not_save_setting": "Could not save the setting.",
+    "unknown_kind": "Choose a series or a movie."
   },
   "titlebar": {
     "minimise": "Minimise",
@@ -45,11 +46,23 @@
     "title": "Library",
     "addFolder": "Add a folder",
     "rescanAll": "Rescan all",
+    "tabs": {
+      "series": "Series",
+      "movie": "Movies"
+    },
+    "kind": {
+      "title": "What did you add?",
+      "body": "Is the folder a series or a movie?",
+      "seriesLabel": "A series",
+      "movieLabel": "A movie"
+    },
     "folderTooLarge": "Some series were not added: one folder holds more than Murk adds at once. Add the rest separately.",
+    "nothingAdded": "No videos were found in this folder.",
     "settings": "Settings",
     "empty": {
       "lead": "Nothing here yet.",
-      "hint": "Add a series folder. Murk will remember where you stopped, and will not show you where that was."
+      "seriesHint": "Add a series folder. Murk will remember where you stopped, and will not show you where that was.",
+      "movieHint": "Add a movie folder. Murk will remember where you stopped, and will not show you where that was."
     },
     "start": "Start",
     "continue": "Continue",
