@@ -895,7 +895,9 @@ mod tests {
 
     fn seeded() -> (Library, i64) {
         let lib = Library::in_memory().unwrap();
-        let sid = lib.add_series(Path::new("/series/show"), "Show", MediaKind::Series).unwrap();
+        let sid = lib
+            .add_series(Path::new("/series/show"), "Show", MediaKind::Series)
+            .unwrap();
         let eps: Vec<ScannedEpisode> = (1..=4)
             .map(|n| ScannedEpisode {
                 path: PathBuf::from(format!("/series/show/S01E{n:02}.mkv")),
@@ -1090,7 +1092,9 @@ mod tests {
     #[test]
     fn duplicate_season_and_number_get_distinct_keys() {
         let lib = Library::in_memory().unwrap();
-        let sid = lib.add_series(Path::new("/series/dup"), "Dup", MediaKind::Series).unwrap();
+        let sid = lib
+            .add_series(Path::new("/series/dup"), "Dup", MediaKind::Series)
+            .unwrap();
         let eps: Vec<ScannedEpisode> = ["a", "b"]
             .iter()
             .map(|name| ScannedEpisode {
@@ -1310,7 +1314,9 @@ mod tests {
     #[test]
     fn subtitle_preference_is_per_series_and_supports_off() {
         let (lib, sid) = seeded();
-        let other = lib.add_series(Path::new("/series/other"), "Other", MediaKind::Series).unwrap();
+        let other = lib
+            .add_series(Path::new("/series/other"), "Other", MediaKind::Series)
+            .unwrap();
 
         assert_eq!(lib.preferred_subtitle_lang(sid).unwrap(), None);
 
@@ -1421,7 +1427,11 @@ mod tests {
         assert_eq!(lib.series(sid).unwrap().unwrap().kind, MediaKind::Series);
 
         let movie = lib
-            .add_series(Path::new("/media/Blade Runner 2049"), "Blade Runner 2049", MediaKind::Movie)
+            .add_series(
+                Path::new("/media/Blade Runner 2049"),
+                "Blade Runner 2049",
+                MediaKind::Movie,
+            )
             .unwrap();
         assert_eq!(lib.series(movie).unwrap().unwrap().kind, MediaKind::Movie);
 
