@@ -16,12 +16,39 @@ use crate::library::sidecar::{self, Entry, Sidecar};
 /// Fraction of the running time after which an episode counts as watched.
 pub const WATCHED_FRACTION: f64 = 0.92;
 
+/// The shelf (series or movie) a folder was added to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MediaKind {
+    Series,
+    Movie,
+}
+
+impl MediaKind {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            MediaKind::Series => "series",
+            MediaKind::Movie => "movie",
+        }
+    }
+
+    /// Unknown values are rejected, never silently defaulted.
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "series" => Some(MediaKind::Series),
+            "movie" => Some(MediaKind::Movie),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct SeriesRow {
     pub id: i64,
     pub root_path: PathBuf,
     pub display_name: String,
     pub poster_path: Option<PathBuf>,
+    pub kind: MediaKind,
 }
 
 #[derive(Debug, Clone)]
@@ -93,6 +120,7 @@ impl Library {
               root_path TEXT NOT NULL UNIQUE,
               display_name TEXT NOT NULL,
               poster_path TEXT,
+              kind TEXT NOT NULL DEFAULT 'series',
               added_at INTEGER NOT NULL);
 
             CREATE TABLE IF NOT EXISTS episode (
@@ -113,6 +141,15 @@ impl Library {
               value TEXT NOT NULL);
             "#,
         )?;
+        // Databases from before the split have no kind column; they are series.
+        if !column_exists(&conn, "series", "kind")? {
+            conn.execute(
+                "ALTER TABLE series ADD COLUMN kind TEXT NOT NULL DEFAULT 'series'",
+                [],
+            )
+            .context("adding the series.kind column")?;
+        }
+
         let library = Self {
             conn: parking_lot::Mutex::new(conn),
             sidecars: parking_lot::Mutex::new(HashMap::new()),
@@ -223,12 +260,20 @@ impl Library {
 
     // --- series ------------------------------------------------------------
 
-    pub fn add_series(&self, root: &Path, display_name: &str) -> Result<i64> {
+    pub fn add_series(&self, root: &Path, display_name: &str, kind: MediaKind) -> Result<i64> {
         let conn = self.conn.lock();
         conn.execute(
-            "INSERT INTO series (root_path, display_name, added_at) VALUES (?1, ?2, ?3)
-             ON CONFLICT(root_path) DO UPDATE SET display_name = excluded.display_name",
-            params![root.to_string_lossy(), display_name, now_secs()],
+            "INSERT INTO series (root_path, display_name, kind, added_at)
+             VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT(root_path) DO UPDATE SET
+               display_name = excluded.display_name,
+               kind = excluded.kind",
+            params![
+                root.to_string_lossy(),
+                display_name,
+                kind.as_str(),
+                now_secs()
+            ],
         )?;
         Ok(conn.query_row(
             "SELECT id FROM series WHERE root_path = ?1",
@@ -240,7 +285,7 @@ impl Library {
     pub fn list_series(&self) -> Result<Vec<SeriesRow>> {
         let conn = self.conn.lock();
         let mut stmt = conn.prepare(
-            "SELECT id, root_path, display_name, poster_path
+            "SELECT id, root_path, display_name, poster_path, kind
              FROM series ORDER BY display_name COLLATE NOCASE",
         )?;
         let rows = stmt
@@ -250,6 +295,7 @@ impl Library {
                     root_path: PathBuf::from(r.get::<_, String>(1)?),
                     display_name: r.get(2)?,
                     poster_path: r.get::<_, Option<String>>(3)?.map(PathBuf::from),
+                    kind: kind_from_column(r, 4)?,
                 })
             })?
             .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -260,7 +306,7 @@ impl Library {
         let conn = self.conn.lock();
         Ok(conn
             .query_row(
-                "SELECT id, root_path, display_name, poster_path
+                "SELECT id, root_path, display_name, poster_path, kind
                  FROM series WHERE id = ?1",
                 params![series_id],
                 |r| {
@@ -269,6 +315,7 @@ impl Library {
                         root_path: PathBuf::from(r.get::<_, String>(1)?),
                         display_name: r.get(2)?,
                         poster_path: r.get::<_, Option<String>>(3)?.map(PathBuf::from),
+                        kind: kind_from_column(r, 4)?,
                     })
                 },
             )
@@ -804,6 +851,32 @@ fn remove_sidecar_file(root: &Path) -> Result<()> {
     }
 }
 
+/// Read a `kind` column. A value that is not a known shelf is corrupt data:
+/// keep the row visible as a series rather than break the whole library, but
+/// say so rather than default in silence.
+fn kind_from_column(r: &rusqlite::Row<'_>, index: usize) -> rusqlite::Result<MediaKind> {
+    let raw: String = r.get(index)?;
+    match MediaKind::parse(&raw) {
+        Some(kind) => Ok(kind),
+        None => {
+            tracing::warn!("unknown series kind {raw:?}, treating as series");
+            Ok(MediaKind::Series)
+        }
+    }
+}
+
+/// Whether `table` already has a column called `column`.
+fn column_exists(conn: &Connection, table: &str, column: &str) -> Result<bool> {
+    let mut stmt = conn.prepare(&format!("PRAGMA table_info({table})"))?;
+    let mut rows = stmt.query([])?;
+    while let Some(row) = rows.next()? {
+        if row.get::<_, String>(1)? == column {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 fn episode_from_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<EpisodeRow> {
     Ok(EpisodeRow {
         id: r.get(0)?,
@@ -822,7 +895,9 @@ mod tests {
 
     fn seeded() -> (Library, i64) {
         let lib = Library::in_memory().unwrap();
-        let sid = lib.add_series(Path::new("/series/show"), "Show").unwrap();
+        let sid = lib
+            .add_series(Path::new("/series/show"), "Show", MediaKind::Series)
+            .unwrap();
         let eps: Vec<ScannedEpisode> = (1..=4)
             .map(|n| ScannedEpisode {
                 path: PathBuf::from(format!("/series/show/S01E{n:02}.mkv")),
@@ -989,7 +1064,7 @@ mod tests {
             })
             .collect();
 
-        let sid = lib.add_series(&dir, "Show").unwrap();
+        let sid = lib.add_series(&dir, "Show", MediaKind::Series).unwrap();
         lib.sync_episodes(sid, &eps).unwrap();
         lib.set_subtitle_lang(sid, Some("rus")).unwrap();
         let first = lib.episodes(sid).unwrap().remove(0);
@@ -1000,7 +1075,7 @@ mod tests {
 
         // Removing the series leaves the file; re-adding the folder restores it.
         lib.remove_series(sid).unwrap();
-        let again = lib.add_series(&dir, "Show").unwrap();
+        let again = lib.add_series(&dir, "Show", MediaKind::Series).unwrap();
         lib.sync_episodes(again, &eps).unwrap();
 
         assert_eq!(
@@ -1017,7 +1092,9 @@ mod tests {
     #[test]
     fn duplicate_season_and_number_get_distinct_keys() {
         let lib = Library::in_memory().unwrap();
-        let sid = lib.add_series(Path::new("/series/dup"), "Dup").unwrap();
+        let sid = lib
+            .add_series(Path::new("/series/dup"), "Dup", MediaKind::Series)
+            .unwrap();
         let eps: Vec<ScannedEpisode> = ["a", "b"]
             .iter()
             .map(|name| ScannedEpisode {
@@ -1047,7 +1124,7 @@ mod tests {
             number: Some(1),
             order_key: "0/0001/0001".to_string(),
         }];
-        let sid = lib.add_series(&dir, "Show").unwrap();
+        let sid = lib.add_series(&dir, "Show", MediaKind::Series).unwrap();
         lib.sync_episodes(sid, &eps).unwrap();
         let first = lib.episodes(sid).unwrap().remove(0);
         lib.save_progress(sid, &first, 42_000, false).unwrap();
@@ -1073,7 +1150,7 @@ mod tests {
             number: Some(1),
             order_key: "0/0001/0001".to_string(),
         }];
-        let sid = lib.add_series(&dir, "Show").unwrap();
+        let sid = lib.add_series(&dir, "Show", MediaKind::Series).unwrap();
         lib.sync_episodes(sid, &eps).unwrap();
         let first = lib.episodes(sid).unwrap().remove(0);
         lib.save_progress(sid, &first, 42_000, false).unwrap();
@@ -1091,7 +1168,7 @@ mod tests {
 
         // Re-adding the moved-back folder restores the position.
         std::fs::rename(&away, &dir).unwrap();
-        let again = lib.add_series(&dir, "Show").unwrap();
+        let again = lib.add_series(&dir, "Show", MediaKind::Series).unwrap();
         lib.sync_episodes(again, &eps).unwrap();
         assert!(lib.has_progress(again).unwrap());
         let restored = lib.episodes(again).unwrap().remove(0);
@@ -1111,6 +1188,7 @@ mod tests {
               root_path TEXT NOT NULL UNIQUE,
               display_name TEXT NOT NULL,
               poster_path TEXT,
+              kind TEXT NOT NULL DEFAULT 'series',
               added_at INTEGER NOT NULL);
             CREATE TABLE episode (
               id INTEGER PRIMARY KEY,
@@ -1171,6 +1249,7 @@ mod tests {
               root_path TEXT NOT NULL UNIQUE,
               display_name TEXT NOT NULL,
               poster_path TEXT,
+              kind TEXT NOT NULL DEFAULT 'series',
               added_at INTEGER NOT NULL);
             CREATE TABLE episode (
               id INTEGER PRIMARY KEY,
@@ -1235,7 +1314,9 @@ mod tests {
     #[test]
     fn subtitle_preference_is_per_series_and_supports_off() {
         let (lib, sid) = seeded();
-        let other = lib.add_series(Path::new("/series/other"), "Other").unwrap();
+        let other = lib
+            .add_series(Path::new("/series/other"), "Other", MediaKind::Series)
+            .unwrap();
 
         assert_eq!(lib.preferred_subtitle_lang(sid).unwrap(), None);
 
@@ -1266,6 +1347,7 @@ mod tests {
               root_path TEXT NOT NULL UNIQUE,
               display_name TEXT NOT NULL,
               poster_path TEXT,
+              kind TEXT NOT NULL DEFAULT 'series',
               added_at INTEGER NOT NULL);
             CREATE TABLE episode (
               id INTEGER PRIMARY KEY,
@@ -1337,5 +1419,92 @@ mod tests {
         assert!(!has_progress);
 
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn add_series_stores_the_chosen_kind() {
+        let (lib, sid) = seeded();
+        assert_eq!(lib.series(sid).unwrap().unwrap().kind, MediaKind::Series);
+
+        let movie = lib
+            .add_series(
+                Path::new("/media/Blade Runner 2049"),
+                "Blade Runner 2049",
+                MediaKind::Movie,
+            )
+            .unwrap();
+        assert_eq!(lib.series(movie).unwrap().unwrap().kind, MediaKind::Movie);
+
+        let rows = lib.list_series().unwrap();
+        let kinds: Vec<MediaKind> = rows.iter().map(|s| s.kind).collect();
+        assert!(kinds.contains(&MediaKind::Series));
+        assert!(kinds.contains(&MediaKind::Movie));
+    }
+
+    #[test]
+    fn re_adding_a_folder_updates_its_kind() {
+        let dir = tempdir();
+        let lib = Library::in_memory().unwrap();
+        let sid = lib.add_series(&dir, "Show", MediaKind::Series).unwrap();
+        assert_eq!(lib.series(sid).unwrap().unwrap().kind, MediaKind::Series);
+
+        let again = lib.add_series(&dir, "Show", MediaKind::Movie).unwrap();
+        assert_eq!(again, sid, "same folder, same row");
+        assert_eq!(lib.series(sid).unwrap().unwrap().kind, MediaKind::Movie);
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn old_databases_gain_a_kind_column_defaulting_to_series() {
+        let dir = tempdir();
+        let db_path = dir.join("library.db");
+        {
+            let conn = Connection::open(&db_path).unwrap();
+            // The schema Murk wrote before the series/movie split.
+            conn.execute_batch(
+                r#"
+                CREATE TABLE series (
+                  id INTEGER PRIMARY KEY,
+                  root_path TEXT NOT NULL UNIQUE,
+                  display_name TEXT NOT NULL,
+                  poster_path TEXT,
+                  added_at INTEGER NOT NULL);
+                CREATE TABLE episode (
+                  id INTEGER PRIMARY KEY,
+                  series_id INTEGER NOT NULL REFERENCES series(id) ON DELETE CASCADE,
+                  path TEXT NOT NULL UNIQUE,
+                  season INTEGER,
+                  number INTEGER,
+                  order_key TEXT NOT NULL,
+                  duration_ms INTEGER,
+                  added_at INTEGER NOT NULL);
+                CREATE TABLE setting (
+                  key TEXT PRIMARY KEY,
+                  value TEXT NOT NULL);
+                "#,
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO series (root_path, display_name, added_at)
+                 VALUES (?1, 'Show', 0)",
+                params![dir.join("S01E01.mkv").to_string_lossy()],
+            )
+            .unwrap();
+        }
+
+        let lib = Library::open(&db_path).unwrap();
+        let rows = lib.list_series().unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].kind, MediaKind::Series, "old rows are series");
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn kind_parse_rejects_unknown_values() {
+        assert_eq!(MediaKind::parse("series"), Some(MediaKind::Series));
+        assert_eq!(MediaKind::parse("movie"), Some(MediaKind::Movie));
+        assert_eq!(MediaKind::parse("album"), None);
     }
 }

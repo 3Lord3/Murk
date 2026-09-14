@@ -59,6 +59,24 @@ function Find-VsTool($name) {
     return $null
 }
 
+function Invoke-WithRetry {
+    # GitHub's API and download endpoints hand out the occasional 5xx or reset
+    # connection; without this a blip fails the whole Windows build.
+    param(
+        [Parameter(Mandatory)][scriptblock]$Action,
+        [string]$What = 'request',
+        [int]$Attempts = 4
+    )
+    for ($i = 1; $i -le $Attempts; $i++) {
+        try { return & $Action }
+        catch {
+            if ($i -eq $Attempts) { throw }
+            Write-Host "  $What failed (attempt $i/$Attempts): $($_.Exception.Message)"
+            Start-Sleep -Seconds (5 * $i)
+        }
+    }
+}
+
 function Report-State {
     Write-Host "libmpv development files:"
     Write-Status (Test-Path (Join-Path $libDir 'mpv.lib')) 'mpv.lib' $libDir
@@ -80,12 +98,14 @@ if ($Check) {
 # --- fetch -------------------------------------------------------------------
 # The dev archive is the one carrying include/ and mpv.def; the player archive
 # is a different asset and is of no use here.
-$release = if ($Version -eq 'latest') {
-    Invoke-RestMethod 'https://api.github.com/repos/zhongfly/mpv-winbuild/releases/latest' `
-        -Headers @{ 'User-Agent' = 'murk-build' }
-} else {
-    Invoke-RestMethod "https://api.github.com/repos/zhongfly/mpv-winbuild/releases/tags/$Version" `
-        -Headers @{ 'User-Agent' = 'murk-build' }
+$release = Invoke-WithRetry -What 'release lookup' -Action {
+    if ($Version -eq 'latest') {
+        Invoke-RestMethod 'https://api.github.com/repos/zhongfly/mpv-winbuild/releases/latest' `
+            -Headers @{ 'User-Agent' = 'murk-build' }
+    } else {
+        Invoke-RestMethod "https://api.github.com/repos/zhongfly/mpv-winbuild/releases/tags/$Version" `
+            -Headers @{ 'User-Agent' = 'murk-build' }
+    }
 }
 
 $asset = $release.assets | Where-Object { $_.name -like 'mpv-dev-x86_64-2*' -and $_.name -notlike '*v3*' } |
@@ -96,7 +116,9 @@ if (-not $asset) {
 
 Write-Host "downloading $($asset.name)"
 $archive = Join-Path ([System.IO.Path]::GetTempPath()) $asset.name
-Invoke-WebRequest $asset.browser_download_url -OutFile $archive -UseBasicParsing
+Invoke-WithRetry -What "download of $($asset.name)" -Action {
+    Invoke-WebRequest $asset.browser_download_url -OutFile $archive -UseBasicParsing
+}
 
 $sevenZip = Get-Command 7z -ErrorAction SilentlyContinue
 if (-not $sevenZip) {

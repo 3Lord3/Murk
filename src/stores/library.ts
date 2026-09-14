@@ -2,9 +2,13 @@ import { defineStore } from "pinia";
 import { ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 
+/** Which shelf a work sits on, chosen when its folder was added. */
+export type MediaKind = "series" | "movie";
+
 export interface SeriesCard {
   id: number;
   displayName: string;
+  kind: MediaKind;
   /** Whether Continue resumes rather than starts. A boolean, never a position. */
   inProgress: boolean;
   /** Whether any progress is stored, including a series watched to the end. */
@@ -39,10 +43,10 @@ export const useLibraryStore = defineStore("library", () => {
     }
   }
 
-  async function add(path: string) {
+  async function add(path: string, kind: MediaKind) {
     // Refresh even on failure so a partial add still shows.
     try {
-      return await invoke<{ added: number; skipped: number }>("add_series", { path });
+      return await invoke<{ added: number; skipped: number }>("add_series", { path, kind });
     } finally {
       await refresh();
     }

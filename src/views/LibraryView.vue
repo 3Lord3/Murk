@@ -1,14 +1,15 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { onMounted, ref, computed } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRouter } from "vue-router";
-import { useEventListener } from "@vueuse/core";
+import { useEventListener, useLocalStorage } from "@vueuse/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
-import { useLibraryStore } from "../stores/library";
+import { useLibraryStore, type MediaKind } from "../stores/library";
 import { errorMessage } from "../i18n/errors";
 import TitleBar from "../components/TitleBar.vue";
 import ConfirmDialog from "../components/ConfirmDialog.vue";
+import KindDialog from "../components/KindDialog.vue";
 
 const library = useLibraryStore();
 const router = useRouter();
@@ -41,13 +42,24 @@ async function addFolder() {
   // file mode lists filenames, and "S02E08 - Endings and Beginnings.mkv" is a
   // spoiler the user cannot unsee.
   const picked = await open({ directory: true, multiple: false, title: t("library.dialog.folderTitle") });
-  if (typeof picked === "string") {
-    await runAction(async () => {
-      const { skipped } = await library.add(picked);
-      // Tell the user if the per-folder cap left series out.
-      if (skipped > 0) library.notice = t("library.folderTooLarge");
-    });
-  }
+  if (typeof picked === "string") pendingFolder.value = picked;
+}
+
+// Which shelf the picked folder goes on, asked rather than guessed.
+const pendingFolder = ref<string | null>(null);
+async function pickKind(kind: MediaKind) {
+  const folder = pendingFolder.value;
+  pendingFolder.value = null;
+  if (!folder) return;
+  // Bring the shelf the folder lands on to the front, or the new card would
+  // be filtered out and the add would look like it did nothing.
+  tab.value = kind;
+  await runAction(async () => {
+    const { added, skipped } = await library.add(folder, kind);
+    // Tell the user if the per-folder cap left titles out.
+    if (skipped > 0) library.notice = t("library.folderTooLarge");
+    else if (added === 0) library.notice = t("library.nothingAdded");
+  });
 }
 
 // Prevent a second add/rescan from starting while one is running.
@@ -144,6 +156,20 @@ async function clearPoster(seriesId: number) {
   await library.clearPoster(seriesId);
 }
 
+// The two shelves; the tabs just pick which is in front. The choice sticks
+// between sessions, so a movie collector is not sent back to series each time.
+const tab = useLocalStorage<MediaKind>("library.tab", "series");
+const tabs: MediaKind[] = ["series", "movie"];
+const visibleSeries = computed(() => library.series.filter((s) => s.kind === tab.value));
+
+// Arrow keys move between tabs, as a tablist is expected to.
+function onTabKey(event: KeyboardEvent) {
+  if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+  event.preventDefault();
+  const step = event.key === "ArrowRight" ? 1 : -1;
+  tab.value = tabs[(tabs.indexOf(tab.value) + step + tabs.length) % tabs.length];
+}
+
 </script>
 
 <template>
@@ -160,17 +186,34 @@ async function clearPoster(seriesId: number) {
         </div>
       </header>
 
+      <nav :class="$style.tabs" role="tablist" :aria-label="t('library.title')" @keydown="onTabKey">
+        <button
+          v-for="k in tabs"
+          :id="`library-tab-${k}`"
+          :key="k"
+          :class="[$style.tab, tab === k ? $style.tabActive : null]"
+          role="tab"
+          :aria-selected="tab === k"
+          aria-controls="library-panel"
+          :tabindex="tab === k ? 0 : -1"
+          @click="tab = k"
+        >
+          {{ t(`library.tabs.${k}`) }}
+        </button>
+      </nav>
+
       <p v-if="library.error" :class="$style.error">{{ errorMessage(library.error) }}</p>
       <p v-if="library.notice" :class="$style.notice">{{ library.notice }}</p>
 
-      <div v-if="!library.loading && library.series.length === 0" :class="$style.empty">
-        <p :class="$style.emptyLead">{{ t("library.empty.lead") }}</p>
-        <p :class="$style.emptyHint">{{ t("library.empty.hint") }}</p>
-      </div>
+      <div id="library-panel" role="tabpanel" :aria-labelledby="`library-tab-${tab}`">
+        <div v-if="!library.loading && visibleSeries.length === 0" :class="$style.empty">
+          <p :class="$style.emptyLead">{{ t("library.empty.lead") }}</p>
+          <p :class="$style.emptyHint">{{ t(`library.empty.${tab}Hint`) }}</p>
+        </div>
 
-      <ul :class="$style.grid">
+        <ul :class="$style.grid">
         <li
-          v-for="s in library.series"
+          v-for="s in visibleSeries"
           :key="s.id"
           :class="$style.card"
           @contextmenu.prevent.stop="openMenu = s.id"
@@ -284,7 +327,8 @@ async function clearPoster(seriesId: number) {
             </div>
           </div>
         </li>
-      </ul>
+        </ul>
+      </div>
     </main>
 
     <ConfirmDialog
@@ -296,6 +340,8 @@ async function clearPoster(seriesId: number) {
       @confirm="confirmPending"
       @cancel="pending = null"
     />
+
+    <KindDialog v-if="pendingFolder !== null" @select="pickKind" @cancel="pendingFolder = null" />
   </div>
 </template>
 
@@ -332,6 +378,35 @@ async function clearPoster(seriesId: number) {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
+}
+
+.tabs {
+  display: inline-flex;
+  gap: 0.25rem;
+  margin: 1.5rem 0 1.5rem;
+  border-radius: var(--r-md);
+  background: var(--c-glass);
+  box-shadow: inset 0 0 0 1px var(--c-hairline-soft);
+  padding: 0.25rem;
+}
+
+.tab {
+  border-radius: var(--r-sm);
+  padding: 0.375rem 1rem;
+  font-size: 0.875rem;
+  color: var(--c-text-muted);
+  transition: background-color var(--t-fast), color var(--t-fast), box-shadow var(--t-fast);
+}
+
+.tab:hover {
+  color: var(--c-text);
+}
+
+.tabActive,
+.tabActive:hover {
+  background: var(--c-surface-raised);
+  box-shadow: inset 0 0 0 1px var(--c-hairline);
+  color: var(--c-text-strong);
 }
 
 .btn {
