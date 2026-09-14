@@ -86,8 +86,13 @@ pub fn set_track(
         .map_err(fail("track_switch_failed"))?;
 
     // mpv's track ids are per-file, so the language is what gets remembered.
-    if kind == TrackKind::Subtitle {
-        remember_subtitle_preference(&state, id);
+    match kind {
+        TrackKind::Audio => {
+            if id.is_some() {
+                remember_audio_preference(&state, id);
+            }
+        }
+        TrackKind::Subtitle => remember_subtitle_preference(&state, id),
     }
 
     events::emit_playback(&app);
@@ -122,6 +127,30 @@ fn remember_subtitle_preference(state: &State<'_, AppState>, id: Option<i64>) {
         .set_subtitle_lang(current.series_id, Some(&value))
     {
         tracing::warn!("could not remember subtitle choice: {e}");
+    }
+}
+
+/// Store the chosen audio language for the series currently playing. There is
+/// no "off" choice, and a track without a reported language is ignored.
+fn remember_audio_preference(state: &State<'_, AppState>, id: Option<i64>) {
+    let Some(current) = state.player.current() else {
+        return;
+    };
+    let Some(id) = id else {
+        return;
+    };
+    let Some(lang) = state
+        .player
+        .state()
+        .audio_tracks
+        .iter()
+        .find(|t| t.id == id)
+        .and_then(|t| t.lang.clone())
+    else {
+        return;
+    };
+    if let Err(e) = state.library.set_audio_lang(current.series_id, Some(&lang)) {
+        tracing::warn!("could not remember audio choice: {e}");
     }
 }
 
