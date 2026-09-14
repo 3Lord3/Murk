@@ -205,9 +205,7 @@ pub fn run(app: AppHandle, shutdown: Arc<AtomicBool>) {
                     // started, and clearing it on `StartFile` would end the new
                     // episode a second in.
                     (prop::EOF_REACHED, PropertyData::Flag(false)) => advancing = false,
-                    (prop::TRACK_LIST, _)
-                    | (prop::AUDIO_TRACK, _)
-                    | (prop::SUBTITLE_TRACK, _) => {
+                    (prop::TRACK_LIST, _) | (prop::AUDIO_TRACK, _) | (prop::SUBTITLE_TRACK, _) => {
                         drop(st);
                         let (audio, subs) = read_tracks(mpv);
                         let mut st = state.player.state_mut();
