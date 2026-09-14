@@ -78,7 +78,7 @@ Murk, это настольный плеер для сериалов и филь
 
 # Установка
 
-Murk работает на Linux и Windows и находится в статусе пре-релиза (v0.1.0).
+Murk работает на Linux и Windows.
 Скачать можно из [последнего релиза](https://github.com/3Lord3/Murk/releases/latest):
 там лежат все сборки и `SHA256SUMS`.
 
@@ -91,8 +91,7 @@ Murk работает на Linux и Windows и находится в стату�
 | Windows 10, 11 | `.exe` | установщик; рядом лежит и `.msi`, для развёртывания |
 
 Дистрибутивам, где всё ещё `libmpv.so.1` (Ubuntu 22.04, Debian 12), подойдут
-AppImage или Flatpak: они несут mpv в себе. В репозиториях дистрибутивов, на
-Flathub и в winget Murk пока нет.
+AppImage или Flatpak: они несут mpv в себе.
 
 Сборка из исходников описана в [BUILDING.ru.md](BUILDING.ru.md).
 

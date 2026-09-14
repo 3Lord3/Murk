@@ -78,7 +78,7 @@ or fix a translation, open a pull request against the catalogues; see
 
 # Installation
 
-Murk runs on Linux and Windows and is pre-release (v0.1.0). Download it from the
+Murk runs on Linux and Windows. Download it from the
 [latest release](https://github.com/3Lord3/Murk/releases/latest): every build is
 attached there, together with `SHA256SUMS`.
 
@@ -91,8 +91,7 @@ attached there, together with `SHA256SUMS`.
 | Windows 10, 11 | `.exe` | installer; `.msi` is there too, for deployment |
 
 Distributions still shipping `libmpv.so.1` (Ubuntu 22.04, Debian 12) should take
-the AppImage or the Flatpak, which carry their own mpv. Nothing is published to
-a distribution repository, to Flathub or to winget yet.
+the AppImage or the Flatpak, which carry their own mpv.
 
 Building from source is covered in [BUILDING.md](BUILDING.md).
 
