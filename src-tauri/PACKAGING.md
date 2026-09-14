@@ -9,7 +9,7 @@ list of its own (`libwebkit2gtk-4.1-0`, `libgtk-3-0`) plus whatever `depends`
 contains, and never invokes either tool. Verified by building and inspecting:
 
 ```
-$ rpm -qpR Murk-0.1.0-1.x86_64.rpm
+$ rpm -qpR Murk-0.2.0-1.x86_64.rpm
 libwebkit2gtk-4.1.so.0()(64bit)
 libgtk-3.so.0()(64bit)
 rpmlib(...)

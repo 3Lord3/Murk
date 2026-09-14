@@ -5,7 +5,7 @@
 **Watch the series, not the timeline.**
 
 <a href="https://github.com/3Lord3/Murk/actions"><img alt="build" src="https://img.shields.io/github/actions/workflow/status/3Lord3/Murk/ci.yml?style=for-the-badge&labelColor=0f131b&label=build"></a>
-<a href="#installation"><img alt="version" src="https://img.shields.io/badge/version-0.1.0-c084fc?style=for-the-badge&labelColor=0f131b"></a>
+<a href="#installation"><img alt="version" src="https://img.shields.io/badge/version-0.2.0-c084fc?style=for-the-badge&labelColor=0f131b"></a>
 <a href="#license"><img alt="license" src="https://img.shields.io/badge/license-GPL--2.0--or--later-e2e8f0?style=for-the-badge&labelColor=0f131b"></a>
 <a href="https://tauri.app"><img alt="Tauri 2" src="https://img.shields.io/badge/Tauri_2-6d76ff?style=for-the-badge&labelColor=0f131b&logo=tauri&logoColor=white"></a>
 <a href="https://www.rust-lang.org"><img alt="Rust backend" src="https://img.shields.io/badge/Rust_backend-5eead4?style=for-the-badge&labelColor=0f131b&logo=rust&logoColor=white"></a>
@@ -87,7 +87,7 @@ attached there, together with `SHA256SUMS`.
 | Debian, Ubuntu | `.deb` | needs `libmpv2` (mpv ≥ 0.36) |
 | Fedora | `.rpm` | needs `mpv-libs` |
 | any Linux | AppImage | self-contained, no system mpv needed |
-| any Linux | `.flatpak` | `flatpak install Murk_0.1.0_x86_64.flatpak` |
+| any Linux | `.flatpak` | `flatpak install Murk_0.2.0_x86_64.flatpak` |
 | Windows 10, 11 | `.exe`, `.msi` |  |
 
 Distributions still shipping `libmpv.so.1` (Ubuntu 22.04, Debian 12) should take
