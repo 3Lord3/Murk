@@ -48,8 +48,7 @@ pub struct Sidecar {
     /// The subtitle language the user last chose for this series, or "off".
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub subtitle_lang: Option<String>,
-    /// The audio language the user last chose for this series. Unlike
-    /// subtitles there is no "off" choice, so `None` means "never chosen".
+    /// The audio language last chosen for this series; `None` means never chosen.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub audio_lang: Option<String>,
     /// Unknown fields from a newer build, carried across a round-trip.

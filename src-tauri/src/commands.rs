@@ -130,9 +130,8 @@ fn remember_subtitle_preference(state: &State<'_, AppState>, id: Option<i64>) {
     }
 }
 
-/// Store the chosen audio language for the series currently playing so it
-/// survives an episode change and an app restart. There is no "off" choice for
-/// audio, and a track whose language mpv did not report is left untouched.
+/// Store the chosen audio language for the series currently playing. There is
+/// no "off" choice, and a track without a reported language is ignored.
 fn remember_audio_preference(state: &State<'_, AppState>, id: Option<i64>) {
     let Some(current) = state.player.current() else {
         return;
