@@ -13,12 +13,12 @@
     "no_window": "The window is gone.",
     "fullscreen_failed": "Could not switch to full screen.",
     "library_read_failed": "Could not read the library.",
-    "not_a_folder": "Choose a series folder, not a file.",
-    "could_not_add_series": "Could not add the series.",
-    "could_not_index_series": "Could not index the series.",
-    "no_such_series": "There is no such series.",
+    "not_a_folder": "Choose a folder, not a file.",
+    "could_not_add_series": "Could not add this title.",
+    "could_not_index_series": "Could not index this title.",
+    "no_such_series": "There is no such title.",
     "rescan_failed": "The rescan failed.",
-    "series_folder_missing": "The series folder is missing.",
+    "series_folder_missing": "The folder is missing.",
     "unsupported_image_type": "Choose a JPG, PNG or WebP image.",
     "could_not_read_image": "Could not read the image.",
     "image_empty": "The chosen file is empty.",
@@ -56,7 +56,7 @@
       "seriesLabel": "A series",
       "movieLabel": "A movie"
     },
-    "folderTooLarge": "Some series were not added: one folder holds more than Murk adds at once. Add the rest separately.",
+    "folderTooLarge": "Some titles were not added: one folder holds more than Murk adds at once. Add the rest separately.",
     "nothingAdded": "No videos were found in this folder.",
     "settings": "Settings",
     "empty": {
@@ -78,14 +78,14 @@
       "remove": "Remove from the library"
     },
     "dialog": {
-      "folderTitle": "Series folder",
-      "posterTitle": "Series cover",
+      "folderTitle": "Folder to add",
+      "posterTitle": "Cover",
       "imageFilter": "Images",
       "resetTitle": "Reset progress",
       "resetConfirm": "Reset",
       "resetBody": "The whole series' progress will be forgotten: resume points and \"watched\" marks. This cannot be undone.",
       "removeTitle": "Remove from the library",
-      "removeBody": "The series will be removed from the library. The files on disk are left alone, but all of its progress will be forgotten.",
+      "removeBody": "The series will be removed from the library. The files on disk are left alone, and its progress stays with the folder: adding it again brings it back.",
       "removeConfirm": "Remove"
     }
   },
