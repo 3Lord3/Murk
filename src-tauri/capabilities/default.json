@@ -11,6 +11,7 @@
     "core:window:allow-close",
     "core:window:allow-minimize",
     "core:event:default",
-    "dialog:allow-open"
+    "dialog:allow-open",
+    "opener:default"
   ]
 }

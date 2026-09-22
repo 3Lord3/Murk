@@ -2,8 +2,10 @@
 import { onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRouter } from "vue-router";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { useProfileStore } from "../stores/profile";
 import TitleBar from "../components/TitleBar.vue";
+import pkg from "../../package.json";
 import {
   LOCALE_NAMES,
   initLocale,
@@ -16,6 +18,23 @@ import {
 const profile = useProfileStore();
 const router = useRouter();
 const { t, te } = useI18n();
+
+const REPO = "https://github.com/3Lord3/Murk";
+const ISSUES = `${REPO}/issues`;
+
+const about = {
+  name: "Murk",
+  version: pkg.version,
+  license: pkg.license,
+};
+
+async function open(url: string) {
+  try {
+    await openUrl(url);
+  } catch (err) {
+    console.error("Failed to open", url, err);
+  }
+}
 
 const locale = ref<LocaleSetting>("system");
 const LOCALE_OPTIONS: LocaleSetting[] = [
@@ -112,6 +131,19 @@ async function chooseLocale(setting: LocaleSetting) {
         <dt :class="$style.key">{{ t("settings.keys.question") }}</dt><dd>{{ t("settings.keys.peek") }}</dd>
         <dt :class="$style.key">{{ t("settings.keys.escape") }}</dt><dd>{{ t("settings.keys.leave") }}</dd>
       </dl>
+
+      <h2 :class="[$style.section, $style.spaced]">{{ t("settings.about.heading") }}</h2>
+
+      <dl :class="$style.about">
+        <dt :class="$style.aboutLabel">{{ t("settings.about.name") }}</dt><dd>{{ about.name }}</dd>
+        <dt :class="$style.aboutLabel">{{ t("settings.about.version") }}</dt><dd>{{ about.version }}</dd>
+        <dt :class="$style.aboutLabel">{{ t("settings.about.license") }}</dt><dd>{{ about.license }}</dd>
+      </dl>
+
+      <div :class="$style.aboutActions">
+        <button :class="$style.aboutLink" @click="open(REPO)">{{ t("settings.about.repository") }}</button>
+        <button :class="$style.aboutLink" @click="open(ISSUES)">{{ t("settings.about.report") }}</button>
+      </div>
     </main>
   </div>
 </template>
@@ -294,12 +326,50 @@ async function chooseLocale(setting: LocaleSetting) {
   color: var(--c-text);
 }
 
+.about {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.5rem 1rem;
+  font-size: 0.875rem;
+  color: var(--c-text-muted);
+}
+
+.aboutLabel {
+  color: var(--c-text-faint);
+}
+
+.aboutActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+
+.aboutLink {
+  border-radius: var(--r-md);
+  background: var(--c-glass);
+  box-shadow: inset 0 0 0 1px var(--c-hairline-soft);
+  padding: 0.5rem 0.875rem;
+  font-size: 0.875rem;
+  color: var(--c-text);
+  transition: background-color var(--t-fast), box-shadow var(--t-fast);
+}
+
+.aboutLink:hover {
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 0 0 1px var(--c-hairline);
+}
+
 @media (min-width: 640px) {
   .main {
     padding-inline: 2rem;
   }
 
   .keys {
+    column-gap: 1.5rem;
+  }
+
+  .about {
     column-gap: 1.5rem;
   }
 }
