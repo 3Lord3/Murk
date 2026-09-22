@@ -2,6 +2,8 @@
 import { onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useEventListener } from "@vueuse/core";
+import { mdiTelevisionClassic, mdiMovieOpen } from "@mdi/js";
+import Icon from "./Icon.vue";
 import type { MediaKind } from "../stores/library";
 const emit = defineEmits<{ select: [kind: MediaKind]; cancel: [] }>();
 const { t } = useI18n();
@@ -36,18 +38,14 @@ function onBackdropClick(event: MouseEvent) {
 
       <div :class="$style.choices">
         <button :class="$style.choice" @click="emit('select', 'series')">
-          <svg :class="$style.icon" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M8.16,3L6.75,4.41L9.34,7H4C2.89,7 2,7.89 2,9V19C2,20.11 2.89,21 4,21H20C21.11,21 22,20.11 22,19V9C22,7.89 21.11,7 20,7H14.66L17.25,4.41L15.84,3L12,6.84L8.16,3M4,9H17V19H4V9M19.5,9A1,1 0 0,1 20.5,10A1,1 0 0,1 19.5,11A1,1 0 0,1 18.5,10A1,1 0 0,1 19.5,9M19.5,12A1,1 0 0,1 20.5,13A1,1 0 0,1 19.5,14A1,1 0 0,1 18.5,13A1,1 0 0,1 19.5,12Z" />
-          </svg>
+          <Icon :class="$style.icon" :path="mdiTelevisionClassic" />
           <span :class="$style.choiceLabel">
             {{ t("library.kind.seriesLabel") }}
           </span>
         </button>
 
         <button :class="$style.choice" @click="emit('select', 'movie')">
-          <svg :class="$style.icon" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M20.84 2.18L16.91 2.96L19.65 6.5L21.62 6.1L20.84 2.18M13.97 3.54L12 3.93L14.75 7.46L16.71 7.07L13.97 3.54M9.07 4.5L7.1 4.91L9.85 8.44L11.81 8.05L9.07 4.5M4.16 5.5L3.18 5.69A2 2 0 0 0 1.61 8.04L2 10L6.9 9.03L4.16 5.5M2 10V20C2 21.11 2.9 22 4 22H20C21.11 22 22 21.11 22 20V10H2Z" />
-          </svg>
+          <Icon :class="$style.icon" :path="mdiMovieOpen" />
           <span :class="$style.choiceLabel">
             {{ t("library.kind.movieLabel") }}
           </span>
