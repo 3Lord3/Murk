@@ -5,6 +5,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { usePlaybackStore } from "../stores/playback";
 import TrackSelect, { type TrackOption } from "./TrackSelect.vue";
 import { useProfileStore } from "../stores/profile";
+import { mdiPause, mdiPlay, mdiRewind10, mdiFastForward10, mdiVolumeOff, mdiVolumeHigh, mdiMusic, mdiSubtitles, mdiHelpCircle, mdiFullscreen, mdiClose } from "@mdi/js";
+import Icon from "./Icon.vue";
 
 const playback = usePlaybackStore();
 const profile = useProfileStore();
@@ -83,25 +85,14 @@ const subtitleValue = computed(() => {
           :title="playback.view.paused ? t('controls.play') : t('controls.pause')"
           @click="invoke('play_pause')"
         >
-          <svg :class="$style.icon" viewBox="0 0 24 24" aria-hidden="true">
-            <path v-if="playback.view.paused" d="M8 5v14l11-7z" />
-            <path v-else d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
-          </svg>
+          <Icon :class="$style.icon" :path="playback.view.paused ? mdiPlay : mdiPause" />
         </button>
 
         <button :class="$style.ctl" :title="t('controls.back10')" @click="invoke('seek_relative', { deltaSec: -10 })">
-          <svg :class="$style.icon" viewBox="0 0 24 24" aria-hidden="true">
-            <path
-              d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"
-            />
-          </svg>
+          <Icon :class="$style.icon" :path="mdiRewind10" />
         </button>
         <button :class="$style.ctl" :title="t('controls.forward10')" @click="invoke('seek_relative', { deltaSec: 10 })">
-          <svg :class="$style.icon" viewBox="0 0 24 24" aria-hidden="true">
-            <path
-              d="M12 5V1l5 5-5 5V7c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6h2c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8z"
-            />
-          </svg>
+          <Icon :class="$style.icon" :path="mdiFastForward10" />
         </button>
 
         <div :class="$style.volume">
@@ -111,16 +102,7 @@ const subtitleValue = computed(() => {
             :aria-pressed="playback.isMuted"
             @click="playback.toggleMute()"
           >
-            <svg :class="$style.icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path
-                v-if="playback.isMuted"
-                d="M12 4L9.91 6.09 12 8.18M4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06a8.99 8.99 0 0 0 3.69-1.81L19.73 21 21 19.73 12 10.73M19 12c0 .94-.2 1.82-.54 2.64l1.51 1.51A8.8 8.8 0 0 0 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71m-2.5 0c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.05-.2.05-.42.05-.63z"
-              />
-              <path
-                v-else
-                d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"
-              />
-            </svg>
+            <Icon :class="$style.icon" :path="playback.isMuted ? mdiVolumeOff : mdiVolumeHigh" />
           </button>
           <input
             :class="$style.slider"
@@ -143,11 +125,7 @@ const subtitleValue = computed(() => {
           @update:model-value="pickTrack('audio', $event)"
         >
           <template #icon>
-            <svg :class="$style.icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path
-                d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z"
-              />
-            </svg>
+            <Icon :class="$style.icon" :path="mdiMusic" />
           </template>
         </TrackSelect>
 
@@ -159,33 +137,19 @@ const subtitleValue = computed(() => {
           @update:model-value="pickTrack('subtitle', $event)"
         >
           <template #icon>
-            <svg :class="$style.icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path
-                d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zM4 12h4v2H4v-2zm10 6H4v-2h10v2zm6 0h-4v-2h4v2zm0-4H10v-2h10v2z"
-              />
-            </svg>
+            <Icon :class="$style.icon" :path="mdiSubtitles" />
           </template>
         </TrackSelect>
 
         <div :class="$style.trailing">
           <button v-if="canPeek" :class="$style.ctl" :title="t('controls.peek')" @click="$emit('peek')">
-            <svg :class="$style.icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path
-                d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26A2 2 0 1 0 10 9H8a4 4 0 1 1 8 0c0 .88-.36 1.68-.93 2.25z"
-              />
-            </svg>
+            <Icon :class="$style.icon" :path="mdiHelpCircle" />
           </button>
           <button :class="$style.ctl" :title="t('controls.fullscreen')" @click="invoke('toggle_fullscreen')">
-            <svg :class="$style.icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z" />
-            </svg>
+            <Icon :class="$style.icon" :path="mdiFullscreen" />
           </button>
           <button :class="$style.ctl" :title="t('controls.leave')" @click="$emit('leave')">
-            <svg :class="$style.icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path
-                d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
-              />
-            </svg>
+            <Icon :class="$style.icon" :path="mdiClose" />
           </button>
         </div>
       </div>

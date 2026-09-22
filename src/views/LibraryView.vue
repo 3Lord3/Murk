@@ -10,6 +10,8 @@ import { errorMessage } from "../i18n/errors";
 import TitleBar from "../components/TitleBar.vue";
 import ConfirmDialog from "../components/ConfirmDialog.vue";
 import KindDialog from "../components/KindDialog.vue";
+import Icon from "../components/Icon.vue";
+import { mdiDotsVertical, mdiImage, mdiClose, mdiRefresh, mdiRestore, mdiDelete } from "@mdi/js";
 
 const library = useLibraryStore();
 const router = useRouter();
@@ -271,36 +273,20 @@ function onTabKey(event: KeyboardEvent) {
                 :title="t('library.more')"
                 @click.stop="toggleMenu(s.id)"
               >
-                <svg :class="$style.icon" viewBox="0 0 24 24" aria-hidden="true">
-                  <path
-                    d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"
-                  />
-                </svg>
+                <Icon :class="$style.icon" :path="mdiDotsVertical" />
               </button>
 
               <div v-if="openMenu === s.id" :class="$style.menu" @click.stop>
                 <button :class="$style.menuItem" @click="choosePoster(s.id)">
-                  <svg :class="$style.menuIcon" viewBox="0 0 24 24" aria-hidden="true">
-                    <path
-                      d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"
-                    />
-                  </svg>
+                  <Icon :class="$style.menuIcon" :path="mdiImage" />
                   {{ t(s.poster ? "library.menu.replacePoster" : "library.menu.choosePoster") }}
                 </button>
                 <button v-if="s.poster" :class="$style.menuItem" @click="clearPoster(s.id)">
-                  <svg :class="$style.menuIcon" viewBox="0 0 24 24" aria-hidden="true">
-                    <path
-                      d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
-                    />
-                  </svg>
+                  <Icon :class="$style.menuIcon" :path="mdiClose" />
                   {{ t("library.menu.clearPoster") }}
                 </button>
                 <button :class="$style.menuItem" @click="rescanSeries(s.id)">
-                  <svg :class="$style.menuIcon" viewBox="0 0 24 24" aria-hidden="true">
-                    <path
-                      d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"
-                    />
-                  </svg>
+                  <Icon :class="$style.menuIcon" :path="mdiRefresh" />
                   {{ t("library.menu.rescan") }}
                 </button>
                 <button
@@ -308,19 +294,11 @@ function onTabKey(event: KeyboardEvent) {
                   :disabled="!s.hasProgress"
                   @click="askResetProgress(s.id)"
                 >
-                  <svg :class="$style.menuIcon" viewBox="0 0 24 24" aria-hidden="true">
-                    <path
-                      d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"
-                    />
-                  </svg>
+                  <Icon :class="$style.menuIcon" :path="mdiRestore" />
                   {{ t("library.menu.resetProgress") }}
                 </button>
                 <button :class="[$style.menuItem, $style.menuItemDanger]" @click="askRemoveSeries(s.id)">
-                  <svg :class="$style.menuIcon" viewBox="0 0 24 24" aria-hidden="true">
-                    <path
-                      d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
-                    />
-                  </svg>
+                  <Icon :class="$style.menuIcon" :path="mdiDelete" />
                   {{ t("library.menu.remove") }}
                 </button>
               </div>

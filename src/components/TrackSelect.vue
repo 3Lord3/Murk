@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from "vue";
+import { mdiCheck } from "@mdi/js";
+import Icon from "./Icon.vue";
 
 export type TrackOption = { value: string; label: string };
 
@@ -139,9 +141,7 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", onOutside, tru
         @pointerenter="active = i"
         @click="choose(i)"
       >
-        <svg :class="$style.check" viewBox="0 0 24 24" aria-hidden="true">
-          <path v-if="i === selectedIndex" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
-        </svg>
+        <Icon :class="$style.check" :style="{ visibility: i === selectedIndex ? 'visible' : 'hidden' }" :path="mdiCheck" />
         <span :class="$style.optionLabel">{{ option.label }}</span>
       </li>
     </ul>
