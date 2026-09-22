@@ -34,6 +34,7 @@ walkdir = "2"
 base64 = "0.22"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tauri-plugin-opener = "2.5.5"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 # gtk is NOT a free choice of version: it must resolve to the very same 0.18.x
