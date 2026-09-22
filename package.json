@@ -17,7 +17,7 @@
     "@tauri-apps/plugin-dialog": "^2.4.0",
     "@tauri-apps/plugin-opener": "^2.5.5",
     "@vueuse/core": "^13.9.0",
-    "pinia": "^3.0.3",
+    "pinia": "^4.0.3",
     "vue": "^3.5.42",
     "vue-i18n": "^11.4.10",
     "vue-router": "^4.5.1"
