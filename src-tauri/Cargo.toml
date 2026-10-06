@@ -31,7 +31,7 @@ thiserror = "2"
 parking_lot = "0.12"
 regex = "1"
 walkdir = "2"
-base64 = "0.22"
+base64 = "0.23"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tauri-plugin-opener = "2.5.5"
