@@ -35,19 +35,13 @@ numbers never reach the screen at all, because the backend does not send them.
 
 # Features
 
-- 🙈 **Nothing to spoil you.** No episode title, number or season, no episode
-  count, no seek bar, no position, duration or time left. Hidden values stay in
-  the backend, so a layout bug, an open devtools window or a stray log line
-  cannot leak them.
-- 👀 **Will you make it?** Find out whether you can finish a film or an episode
-  in 10–60 minutes, without spoiling the exact time left or where you are in it.
-- 📚 **A quiet library.** You add a series as a folder, never as a file,
-  because a filename can be a spoiler in itself. Each card has one button,
-  *Start* or *Continue*. No episode lists, no hints, no indicators.
-- ▶️ **Endings that stay closed.** The next episode starts right away or an
-  end-of-episode card appears — depending on the chosen profile.
-- 🎬 **Covers that give nothing away.** No downloaded artwork. A cover is your
-  own image file, or a plain colour field derived from the series name.
+- 🙈 **Nothing to spoil you.** No episode title, number or season, no episode count, no seek bar, no position, duration or time left. Hidden values stay in the backend, so a layout bug, an open devtools window or a stray log line cannot leak them.
+- 👀 **Will you make it?** Find out whether you can finish a film or an episode in 10–60 minutes, without spoiling the exact time left or where you are in it.
+- 📚 **A quiet library.** You add a series as a folder, never as a file, because a filename can be a spoiler in itself. Each card has one button, *Start* or *Continue*. No episode lists, no hints, no indicators.
+- ▶️ **Endings that stay closed.** The next episode starts right away or an end-of-episode card appears — depending on the chosen profile.
+- ⏭️ **The intro skips itself.** Murk jumps past openings, endings and
+  recaps, so you get to the story sooner.
+- 🎬 **Covers that give nothing away.** No downloaded artwork. A cover is your own image file, or a plain colour field derived from the series name.
 - 🗣️ **Multilingual.** Follows the system language, overridable in settings.
 
 ## Profiles

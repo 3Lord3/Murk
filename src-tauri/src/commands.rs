@@ -511,6 +511,9 @@ fn play_episode(
 ) -> CommandResult<()> {
     let count = state.library.episode_count(episode.series_id).unwrap_or(0);
 
+    // The previous file's openings belong to the previous file.
+    state.player.set_skip_times(None);
+
     state
         .player
         .set_current(Some(crate::player::CurrentEpisode {
@@ -534,6 +537,8 @@ fn play_episode(
         };
         st.path = Some(episode.path.clone());
     }
+
+    // The skip lookup starts from `FileLoaded`, when the length is known.
 
     // `pause` is global and survives across files, so force it off before
     // loading: setting it after `loadfile` would let a second of the opening
@@ -730,4 +735,24 @@ pub fn system_languages() -> Vec<String> {
         }
     }
     tags
+}
+
+/// Whether Murk skips openings, endings, recaps and previews on its own.
+#[tauri::command]
+pub fn get_auto_skip(state: State<'_, AppState>) -> CommandResult<bool> {
+    Ok(crate::skip::enabled(&state.library))
+}
+
+/// Turn automatic skipping on or off. Off keeps Murk from telling the marker
+/// databases what is being watched; segments already fetched are dropped.
+#[tauri::command]
+pub fn set_auto_skip(state: State<'_, AppState>, enabled: bool) -> CommandResult<()> {
+    state
+        .library
+        .set_setting("auto_skip", if enabled { "on" } else { "off" })
+        .map_err(fail("could_not_save_setting"))?;
+    if !enabled {
+        state.player.set_skip_times(None);
+    }
+    Ok(())
 }

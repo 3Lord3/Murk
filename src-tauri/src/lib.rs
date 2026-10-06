@@ -8,6 +8,7 @@ pub mod commands;
 pub mod library;
 pub mod player;
 pub mod privacy;
+pub mod skip;
 
 use anyhow::{Context, Result};
 use parking_lot::Mutex;
@@ -31,6 +32,8 @@ pub struct AppState {
     /// The episode queued by auto-advance, waiting for the countdown to finish
     /// or be cancelled.
     pub pending_next: Mutex<Option<i64>>,
+    /// Resolved media ids and fetched skip segments, looked up once per run.
+    pub skip: skip::Store,
     pub shutdown: Arc<AtomicBool>,
 }
 
@@ -136,6 +139,7 @@ fn build_state(app: &tauri::App, embed_window: Option<i64>) -> Result<AppState> 
         covers_dir,
         poster_cache: Mutex::new(poster::DataUrlCache::new()),
         pending_next: Mutex::new(None),
+        skip: skip::Store::new(),
         shutdown: Arc::new(AtomicBool::new(false)),
     })
 }
@@ -243,6 +247,8 @@ pub fn run() {
             commands::system_languages,
             commands::get_locale,
             commands::set_locale,
+            commands::get_auto_skip,
+            commands::set_auto_skip,
         ])
         .build(tauri::generate_context!());
 

@@ -22,6 +22,7 @@ use parking_lot::{Mutex, RwLock};
 use std::path::Path;
 
 use crate::privacy::{HidingProfile, PlaybackState};
+use crate::skip::SkipTimes;
 
 /// mpv options, set before `mpv_initialize`.
 ///
@@ -151,6 +152,9 @@ pub struct PlayerHandle {
     profile: RwLock<HidingProfile>,
     current: Mutex<Option<CurrentEpisode>>,
     credit: Mutex<WatchCredit>,
+    /// Openings and endings of the running file. Stays on this side of the
+    /// IPC boundary, like the playhead it is measured against.
+    skip: Mutex<Option<std::sync::Arc<SkipTimes>>>,
 }
 
 /// Force `LC_NUMERIC` back to `C` for the whole process.
@@ -251,6 +255,7 @@ impl PlayerHandle {
             profile: RwLock::new(profile),
             current: Mutex::new(None),
             credit: Mutex::new(WatchCredit::default()),
+            skip: Mutex::new(None),
         })
     }
 
@@ -280,6 +285,19 @@ impl PlayerHandle {
 
     pub fn set_current(&self, current: Option<CurrentEpisode>) {
         *self.current.lock() = current;
+    }
+
+    /// Set the running file's skip times. `None` clears them.
+    pub fn set_skip_times(&self, times: Option<std::sync::Arc<SkipTimes>>) {
+        *self.skip.lock() = times;
+    }
+
+    /// Where the segment containing `position` ends, if it is inside one.
+    pub fn skip_target(&self, position_sec: f64) -> Option<f64> {
+        self.skip
+            .lock()
+            .as_ref()
+            .and_then(|times| times.target(position_sec))
     }
 
     /// Credit playback up to `position_sec` of the current file.
@@ -345,6 +363,18 @@ impl PlayerHandle {
         Ok(())
     }
 
+    /// Jump the playhead to an absolute second.
+    ///
+    /// Not wired to a command, and it must not be: it is only for moving
+    /// past a segment the backend alone knows the bounds of. `absolute+exact`
+    /// pins the landing on the requested second, so a keyframe inside the
+    /// segment cannot make the same skip fire again.
+    pub fn seek_absolute(&self, sec: f64) -> Result<()> {
+        self.mpv
+            .command("seek", &[&format!("{sec:.3}"), "absolute+exact"])?;
+        Ok(())
+    }
+
     /// Seek by a delta. There is no absolute counterpart anywhere in this API.
     ///
     /// This is the architectural point, not a UI choice: with no
@@ -398,6 +428,7 @@ impl PlayerHandle {
     pub fn stop(&self) -> Result<()> {
         self.mpv.command("stop", &[])?;
         self.set_current(None);
+        self.set_skip_times(None);
         let mut st = self.state_mut();
         st.episode = crate::privacy::EpisodeIdentity::default();
         st.path = None;

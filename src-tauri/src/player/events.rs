@@ -210,6 +210,14 @@ pub fn run(app: AppHandle, shutdown: Arc<AtomicBool>) {
                         // One step at a time, so seeking into the last
                         // minutes of an episode does not finish it.
                         state.player.credit_position(v);
+                        // The playhead lands on the segment's end, so this fires
+                        // once per segment, not on every position update.
+                        if let Some(end) = state.player.skip_target(v) {
+                            tracing::debug!(from = v, to = end, "skipping an opening or ending");
+                            if let Err(e) = state.player.seek_absolute(end) {
+                                tracing::warn!("could not skip: {e}");
+                            }
+                        }
                         continue;
                     }
                     (prop::DURATION, PropertyData::Double(v)) => {
@@ -263,13 +271,18 @@ pub fn run(app: AppHandle, shutdown: Arc<AtomicBool>) {
                 );
                 // Record the running time for `can_finish_within`, before
                 // playback produces a position.
-                if let (Some(current), Ok(duration)) =
-                    (state.player.current(), mpv.get_property::<f64>("duration"))
-                {
+                let duration_ms = mpv
+                    .get_property::<f64>("duration")
+                    .ok()
+                    .map(|d| (d * 1000.0) as i64);
+                if let (Some(current), Some(duration_ms)) = (state.player.current(), duration_ms) {
                     let _ = state
                         .library
-                        .record_duration(current.episode_id, (duration * 1000.0) as i64);
+                        .record_duration(current.episode_id, duration_ms);
                 }
+                // Looked up only now, so the markers can be checked and
+                // rescaled against the length mpv reports here.
+                crate::skip::spawn_lookup(&app, duration_ms);
                 // mpv finalises default track selection during load and would
                 // clobber a `sid` set earlier, so re-read after `FileLoaded`.
                 let (audio, subs) = read_tracks(mpv);

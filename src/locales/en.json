@@ -149,6 +149,13 @@
       "coarse": "only \"yes\" or \"no\"",
       "confirmed": "exact numbers after a confirmation"
     },
+    "autoSkip": {
+      "heading": "Intros, outros and recaps",
+      "note": "Murk skips openings, endings, recaps and previews on its own, preferring TheIntroDB and falling back to AniSkip for anime. A lookup sends the title and episode number to those databases; identifying an anime also sends the title to MyAnimeList. Timestamps that do not fit the file's running time are discarded.",
+      "on": "Skip automatically",
+      "off": "Do not skip",
+      "selected": "selected"
+    },
     "language": {
       "heading": "Language",
       "note": "Murk speaks your system's language if it knows it, and English if it does not. You can overrule that here.",

@@ -2,6 +2,7 @@
 import { onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRouter } from "vue-router";
+import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useProfileStore } from "../stores/profile";
 import TitleBar from "../components/TitleBar.vue";
@@ -36,6 +37,8 @@ async function open(url: string) {
   }
 }
 
+const autoSkipOn = ref(true);
+
 const locale = ref<LocaleSetting>("system");
 const LOCALE_OPTIONS: LocaleSetting[] = [
   "system",
@@ -45,7 +48,13 @@ const LOCALE_OPTIONS: LocaleSetting[] = [
 onMounted(async () => {
   await profile.refresh();
   locale.value = await initLocale();
+  autoSkipOn.value = await invoke<boolean>("get_auto_skip");
 });
+
+async function chooseAutoSkip(enabled: boolean) {
+  autoSkipOn.value = enabled;
+  await invoke("set_auto_skip", { enabled });
+}
 
 async function chooseLocale(setting: LocaleSetting) {
   locale.value = setting;
@@ -92,6 +101,27 @@ async function chooseLocale(setting: LocaleSetting) {
                 })
               }}
             </p>
+          </button>
+        </li>
+      </ul>
+
+      <h2 :class="[$style.section, $style.spaced]">{{ t("settings.autoSkip.heading") }}</h2>
+      <p :class="$style.sectionNote">{{ t("settings.autoSkip.note") }}</p>
+
+      <ul :class="$style.list">
+        <li v-for="option in [true, false]" :key="String(option)">
+          <button
+            :class="[$style.option, autoSkipOn === option ? $style.selected : null]"
+            @click="chooseAutoSkip(option)"
+          >
+            <div :class="$style.optionHead">
+              <span :class="$style.optionName">
+                {{ option ? t("settings.autoSkip.on") : t("settings.autoSkip.off") }}
+              </span>
+              <span v-if="autoSkipOn === option" :class="$style.badge">
+                {{ t("settings.autoSkip.selected") }}
+              </span>
+            </div>
           </button>
         </li>
       </ul>
