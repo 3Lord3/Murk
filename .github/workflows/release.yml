@@ -28,7 +28,7 @@ jobs:
     name: deb + rpm
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag || github.ref }}
       - uses: pnpm/action-setup@v6
@@ -63,7 +63,7 @@ jobs:
     name: AppImage
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag || github.ref }}
       - uses: pnpm/action-setup@v6
@@ -103,7 +103,7 @@ jobs:
     name: Flatpak bundle
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag || github.ref }}
       - name: Install flatpak-builder
@@ -140,7 +140,7 @@ jobs:
     name: Windows installers
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag || github.ref }}
       - uses: pnpm/action-setup@v6
@@ -178,7 +178,7 @@ jobs:
     steps:
       # The notes come from the commit log, so the whole history has to be
       # here: a shallow clone would silently produce an empty changelog.
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag || github.ref }}
           fetch-depth: 0
